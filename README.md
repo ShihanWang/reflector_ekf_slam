@@ -37,3 +37,5 @@
 （4）FEJ的使用：First Estimate Jacobin
 
 （5）利用EKF位姿构建栅格地图
+
+（6）轮速计的外参放到状态空间内进行优化
