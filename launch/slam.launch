@@ -1,11 +1,10 @@
 <launch>
 
-		<node pkg="reflector_ekf_slam" type="slam_node" name="slam_node" output="screen">
+		<node name="slam_node" pkg="reflector_ekf_slam" type="slam_node" cwd="node" output="screen" />
       <param name="laser" value="scan" type="str" />
       <param name="odom"  value="odom" type="str" />
       <param name="start_pose" value="0.0,0.0,0.0" type="str" />
-      <param name="map_path" value="${find reflector_ekf_slam}/test.txt" type="str"/>
-    </node> 
+      <param name="map_path" value="$(find reflector_ekf_slam)/test.txt" type="str"/>
 
     <node pkg="rviz" type="rviz" name="rviz" output="screen" 
       args="-d $(find reflector_ekf_slam)/rviz/default.rviz" required="true">

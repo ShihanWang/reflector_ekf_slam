@@ -89,7 +89,8 @@ int main(int argc, char **argv)
             
     nh.getParam ( "laser", laser_topic_name);
     nh.getParam ( "odom", encoder_topic_name);
-
+    ROS_INFO("Laser topic is: %s", laser_topic_name.c_str());
+    ROS_INFO("Odom topic is: %s", encoder_topic_name.c_str());
     // Read initial pose from launch file, we need initial pose for relocalization
     std::string pose_str;
     if(nh.getParam("start_pose", pose_str) && !pose_str.empty())
@@ -104,7 +105,7 @@ int main(int argc, char **argv)
         y0_ = std::stod(v[1]);
         yaw0_ = std::stod(v[2]);
     }
-
+    ROS_INFO("Start pose is: %f, %f, %f", x0_, y0_, yaw0_);
     std::string map_path;
     if(!nh.getParam("map_path", map_path))
     {
