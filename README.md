@@ -34,7 +34,7 @@
 
 （3）特征的使用：直角点、线段，当做观测
 
-（4）FEJ的使用：First Estimate Jacobin
+（4）FEJ的使用：First-Estimates Jacobian
 
 （5）利用EKF位姿构建栅格地图
 
