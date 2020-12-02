@@ -6,8 +6,8 @@
       <param name="start_pose" value="0.0,0.0,0.0" type="str" />
       <param name="map_path" value="$(find reflector_ekf_slam)/test.txt" type="str"/>
 
-    <node pkg="rviz" type="rviz" name="rviz" output="screen" 
+    <!-- <node pkg="rviz" type="rviz" name="rviz" output="screen" 
       args="-d $(find reflector_ekf_slam)/rviz/default.rviz" required="true">
-    </node>
+    </node> -->
 
 </launch>

@@ -77,15 +77,8 @@ ReflectorEKFSLAM::~ReflectorEKFSLAM()
     }
 }
 
-void ReflectorEKFSLAM::addEncoder (const nav_msgs::Odometry::ConstPtr &odometry)
+void ReflectorEKFSLAM::predict(const double& dt)
 {
-    if(odometry->header.stamp.toSec() <= time_)
-        return;
-    const double now_time = odometry->header.stamp.toSec();
-    /***** 保存上一帧编码器数据 *****/
-    wt_ = odometry->twist.twist.angular.z;
-    vt_ = odometry->twist.twist.linear.x;
-    const double dt = now_time - time_;    
     const double delta_theta = wt_ * dt;
     const double delta_x = vt_ * dt * std::cos(mu_(2) + delta_theta / 2);
     const double delta_y = vt_ * dt * std::sin(mu_(2) + delta_theta / 2);
@@ -113,6 +106,46 @@ void ReflectorEKFSLAM::addEncoder (const nav_msgs::Odometry::ConstPtr &odometry)
     /***** 更新均值 *****/
     mu_.topRows(3) += Eigen::Vector3d(delta_x, delta_y, delta_theta);
     mu_(2) = std::atan2(std::sin(mu_(2)), std::cos(mu_(2))); //norm
+}
+
+void ReflectorEKFSLAM::addEncoder (const nav_msgs::Odometry::ConstPtr &odometry)
+{
+    if(odometry->header.stamp.toSec() <= time_)
+        return;
+    const double now_time = odometry->header.stamp.toSec();
+    /***** 保存上一帧编码器数据 *****/
+    wt_ = odometry->twist.twist.angular.z;
+    vt_ = odometry->twist.twist.linear.x;
+    const double dt = now_time - time_;   
+    predict(dt); 
+    // const double delta_theta = wt_ * dt;
+    // const double delta_x = vt_ * dt * std::cos(mu_(2) + delta_theta / 2);
+    // const double delta_y = vt_ * dt * std::sin(mu_(2) + delta_theta / 2);
+
+    // const int N = mu_.rows();
+    // /***** 更新协方差 *****/
+    // /* 构造 Gt */
+    // const double angular_half_delta =  mu_(2) + delta_theta / 2;
+    // Eigen::MatrixXd G_xi = Eigen::MatrixXd::Zero(N, 3);
+
+    // Eigen::Matrix3d G_xi_2 = Eigen::Matrix3d::Identity();
+    // G_xi_2(0, 2) = -vt_ * dt * std::sin(angular_half_delta);
+    // G_xi_2(1, 2) = vt_ * dt * std::cos(angular_half_delta); 
+    // G_xi.block(0,0,3,3) = G_xi_2;
+
+    // /* 构造 Gu' */
+    // Eigen::MatrixXd G_u = Eigen::MatrixXd::Zero(N, 2);
+    // Eigen::MatrixXd G_u_2(3, 2);
+    // G_u_2 << dt * std::cos(angular_half_delta), -vt_ * dt * dt * std::sin(angular_half_delta) / 2,
+    //     dt * std::sin(angular_half_delta), vt_ * dt * dt * std::cos(angular_half_delta) / 2,
+    //     0, dt;
+    // G_u.block(0,0,3,2) = G_u_2;
+    // /* 更新协方差 */
+    // sigma_ = G_xi * sigma_ * G_xi.transpose() + G_u * Qu_ * G_u.transpose();
+    // /***** 更新均值 *****/
+    // mu_.topRows(3) += Eigen::Vector3d(delta_x, delta_y, delta_theta);
+    // mu_(2) = std::atan2(std::sin(mu_(2)), std::cos(mu_(2))); //norm
+    std::cout << "Predict covariance is: \n" << sigma_ << std::endl;
     time_ = now_time;
 }
 
@@ -122,34 +155,37 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     const double dt = now_time - time_;
 
     // Predict now pose
-    const double delta_theta = wt_ * dt;
-    const double delta_x = vt_ * dt * std::cos(mu_(2) + delta_theta / 2);
-    const double delta_y = vt_ * dt * std::sin(mu_(2) + delta_theta / 2);
     const int N = mu_.rows();
-    /***** 更新协方差 *****/
-    /* 构造 Gt */
-    const double angular_half_delta =  mu_(2) + delta_theta / 2;
-    Eigen::MatrixXd G_xi = Eigen::MatrixXd::Zero(N, 3);
+    predict(dt);
+    // const double delta_theta = wt_ * dt;
+    // const double delta_x = vt_ * dt * std::cos(mu_(2) + delta_theta / 2);
+    // const double delta_y = vt_ * dt * std::sin(mu_(2) + delta_theta / 2);
+    // const int N = mu_.rows();
+    // /***** 更新协方差 *****/
+    // /* 构造 Gt */
+    // const double angular_half_delta =  mu_(2) + delta_theta / 2;
+    // Eigen::MatrixXd G_xi = Eigen::MatrixXd::Zero(N, 3);
 
-    Eigen::Matrix3d G_xi_2 = Eigen::Matrix3d::Identity();
-    G_xi_2(0, 2) = -vt_ * dt * std::sin(angular_half_delta);
-    G_xi_2(1, 2) = vt_ * dt * std::cos(angular_half_delta); 
-    G_xi.block(0,0,3,3) = G_xi_2;
+    // Eigen::Matrix3d G_xi_2 = Eigen::Matrix3d::Identity();
+    // G_xi_2(0, 2) = -vt_ * dt * std::sin(angular_half_delta);
+    // G_xi_2(1, 2) = vt_ * dt * std::cos(angular_half_delta); 
+    // G_xi.block(0,0,3,3) = G_xi_2;
 
-    /* 构造 Gu' */
-    Eigen::MatrixXd G_u = Eigen::MatrixXd::Zero(N, 2);
-    Eigen::MatrixXd G_u_2(3, 2);
-    G_u_2 << dt * std::cos(angular_half_delta), -vt_ * dt * dt * std::sin(angular_half_delta) / 2,
-        dt * std::sin(angular_half_delta), vt_ * dt * dt * std::cos(angular_half_delta) / 2,
-        0, dt;
-    G_u.block(0,0,3,2) = G_u_2;
-    /* 更新协方差 */
-    sigma_ = G_xi * sigma_ * G_xi.transpose() + G_u * Qu_ * G_u.transpose();
-    /***** 更新均值 *****/
-    mu_.topRows(3) += Eigen::Vector3d(delta_x, delta_y, delta_theta);
-    mu_(2) = std::atan2(std::sin(mu_(2)), std::cos(mu_(2))); //norm
+    // /* 构造 Gu' */
+    // Eigen::MatrixXd G_u = Eigen::MatrixXd::Zero(N, 2);
+    // Eigen::MatrixXd G_u_2(3, 2);
+    // G_u_2 << dt * std::cos(angular_half_delta), -vt_ * dt * dt * std::sin(angular_half_delta) / 2,
+    //     dt * std::sin(angular_half_delta), vt_ * dt * dt * std::cos(angular_half_delta) / 2,
+    //     0, dt;
+    // G_u.block(0,0,3,2) = G_u_2;
+    // /* 更新协方差 */
+    // sigma_ = G_xi * sigma_ * G_xi.transpose() + G_u * Qu_ * G_u.transpose();
+    // /***** 更新均值 *****/
+    // mu_.topRows(3) += Eigen::Vector3d(delta_x, delta_y, delta_theta);
+    // mu_(2) = std::atan2(std::sin(mu_(2)), std::cos(mu_(2))); //norm
     time_ = now_time;
-
+    std::cout << "Predict now pose is: " << mu_(0) << "," << mu_(1) << "," << mu_(2) << std::endl;
+    std::cout << "Predict now covariance is: \n" << sigma_ << std::endl;
     Observation observation;
     if(!getObservations(*scan, observation))
     {
@@ -159,6 +195,8 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     matched_ids result = detectMatchedIds(observation);
     const int M_ = result.map_obs_match_ids.size();
     const int M = result.state_obs_match_ids.size();
+    std::cout << "Match with old map size is: " << M_ << std::endl;
+    std::cout << "Match with state vector size is: " << M << std::endl;
     const int MM = M + M_;
     if(MM > 0)
     {
@@ -172,7 +210,7 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
         B << cos_theta, sin_theta, -sin_theta, cos_theta;
         if(M > 0)
         {
-            const auto xy = [=](const int &id) -> Eigen::Vector2d {
+            const auto xy = [&](const int &id) -> Eigen::Vector2d {
                 return Eigen::Vector2d(mu_(3 + 2 * id), mu_(3 + 2 * id + 1));
             };
             for(int i = 0; i < M; ++i)
@@ -204,12 +242,12 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
                 const int local_id = result.map_obs_match_ids[i].first;
                 const int global_id =result.map_obs_match_ids[i].second;
                 zt(2 * (M + i)) = observation.cloud_[local_id].x();
-                zt(2 * (M + i + 1)) = observation.cloud_[local_id].y();
+                zt(2 * (M + i) + 1) = observation.cloud_[local_id].y();
                 const double delta_x = xy(global_id).x() - mu_(0);
                 const double delta_y = xy(global_id).y() - mu_(1);
 
                 zt_hat(2 * (M + i)) = delta_x * cos_theta + delta_y * sin_theta;
-                zt_hat(2 * (M + i + 1)) = -delta_x * sin_theta + delta_y * cos_theta;
+                zt_hat(2 * (M + i) + 1) = -delta_x * sin_theta + delta_y * cos_theta;
 
                 Eigen::MatrixXd A_i(2, 3);
                 A_i << -cos_theta, -sin_theta, -delta_x * sin_theta + delta_y * cos_theta,
@@ -228,6 +266,7 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     const int N2 = result.new_ids.size();
     if(N2 > 0)
     {
+        std::cout << "Add " << N2 << " reflectors" << std::endl;
         // increase X_estimate and coviarance size
         const int M_e = N + 2 * N2;
         Eigen::VectorXd tmp_xe = Eigen::VectorXd::Zero(M_e);
@@ -259,16 +298,18 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
             Eigen::MatrixXd G_fx = Eigen::MatrixXd::Zero(2, N);
             G_fx.topLeftCorner(2, 3) = Gp_i;
             Eigen::MatrixXd sigma_mx = G_fx * sigma_;
-            tmp_sigma.block(N, 0, 2, N) = sigma_mx;
-            tmp_sigma.block(0, N, N, 2) = sigma_mx.transpose();
-            tmp_sigma.block(N, N, 2, 2) = sigma_mm;
+            tmp_sigma.block(N + 2 * i , 0, 2, N) = sigma_mx;
+            tmp_sigma.block(0, N + 2 * i , N, 2) = sigma_mx.transpose();
+            tmp_sigma.block(N + 2 * i, N + 2 * i, 2, 2) = sigma_mm;
         }
         sigma_.resize(M_e, M_e);
         sigma_ = tmp_sigma;
         mu_.resize(M_e);
         mu_ = tmp_xe;
     }
-
+    std::cout << "Update now pose is: " << mu_(0) << "," << mu_(1) << "," << mu_(2) << std::endl;
+    std::cout << "state vector:  \n" << mu_ << std::endl;
+    std::cout << "covariance is:  \n" << sigma_ << std::endl;
     ekf_path_.header.stamp = scan->header.stamp;
     ekf_path_.header.frame_id = "world";
     geometry_msgs::PoseStamped pose;
@@ -386,6 +427,7 @@ bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observ
         return false;
     obs.time_ = msg.header.stamp.toSec();
     obs.cloud_ = centers;
+    std::cout << "detect " << obs.cloud_.size() << " reflectors" << std::endl;
     return true;
 }
 
@@ -393,15 +435,26 @@ visualization_msgs::MarkerArray ReflectorEKFSLAM::toRosMarkers(double scale)
 {
 
     visualization_msgs::MarkerArray markers;
-    int N = 0;
-    for(int i = 4; i < mu_.rows(); i+=2)
+    const int N = mu_.rows();
+    if(N == 3)
     {
-        double& mx = mu_(i-1);
-        double& my = mu_(i);
+        std::cout << "no reflector " << std::endl;
+        return markers;
+    }
+        
+    const int M = (N - 3) / 2;
+    std::cout << "now reflector size is : " << M << std::endl;
+    for(int i = 0; i < M; i++)
+    {
+        const int id = 3 + 2 * i;
+        double mx = mu_(id);
+        double my = mu_(id + 1);
+        std::cout << "real xy: " << mx << "," << my << std::endl;
 
 
         /* 计算地图点的协方差椭圆角度以及轴长 */
-        Eigen::Matrix2d sigma_m = sigma_.block(i-1, i-1, 2, 2); //协方差
+        Eigen::Matrix2d sigma_m = sigma_.block(id, id, 2, 2); //协方差
+        std::cout << "cov: \n" << sigma_m <<std::endl;
         // Calculate Eigen Value(D) and Vectors(V), simga_m = V * D * V^-1
         // D = | D1 0  |  V = |cos  -sin|
         //     | 0  D2 |      |sin  cos |
@@ -412,18 +465,20 @@ visualization_msgs::MarkerArray ReflectorEKFSLAM::toRosMarkers(double scale)
         const double angle = std::atan2(eigen_vector(1, 0), eigen_vector(0, 0));
         const double x_len = 2 * std::sqrt(eigen_value(0, 0) * 5.991);
         const double y_len = 2 * std::sqrt(eigen_value(1, 1) * 5.991);
+        std::cout << "x_len: " << x_len << std::endl;
+        std::cout << "y_len: " << y_len << std::endl;
         
         /* 构造marker */
         visualization_msgs::Marker marker;
         marker.header.frame_id = "world";
-        marker.header.stamp = ros::Time();
+        marker.header.stamp = ros::Time(time_);
         marker.ns = "ekf_slam";
         marker.id = i;
         marker.type = visualization_msgs::Marker::SPHERE;
         marker.action = visualization_msgs::Marker::ADD;
         marker.pose.position.x = mx;
         marker.pose.position.y = my;
-        marker.pose.position.z = 0;
+        marker.pose.position.z = 0.;
         marker.pose.orientation.x = 0.;
         marker.pose.orientation.y = 0.;
         marker.pose.orientation.z = std::sin(angle / 2);
@@ -447,21 +502,23 @@ geometry_msgs::PoseWithCovarianceStamped ReflectorEKFSLAM::toRosPose()
     /* 转换带协方差的机器人位姿 */
     geometry_msgs::PoseWithCovarianceStamped rpose;
     rpose.header.frame_id = "world";
+    
     rpose.pose.pose.position.x = mu_(0);
     rpose.pose.pose.position.y = mu_(1);
     rpose.pose.pose.orientation.x = 0.0;
-    rpose.pose.pose.orientation.y = 0.;
+    rpose.pose.pose.orientation.y = 0.0;
     rpose.pose.pose.orientation.z = std::sin(mu_(2) / 2);
     rpose.pose.pose.orientation.w = std::cos(mu_(2) / 2);
     
-    rpose.pose.covariance.at(0) = sigma_(0,0);
-    rpose.pose.covariance.at(1) = sigma_(0,1);
-    rpose.pose.covariance.at(6) = sigma_(1,0);
-    rpose.pose.covariance.at(7) = sigma_(1,1);
-    rpose.pose.covariance.at(5) = sigma_(0,2);
-    rpose.pose.covariance.at(30) = sigma_(2,0);
-    rpose.pose.covariance.at(35) = sigma_(2,2);
-    
+    rpose.pose.covariance.at(0) = sigma_(0, 0);
+    rpose.pose.covariance.at(1) = sigma_(0, 1);
+    rpose.pose.covariance.at(5) = sigma_(0, 2);
+    rpose.pose.covariance.at(6) = sigma_(1, 0);
+    rpose.pose.covariance.at(7) = sigma_(1, 1);
+    rpose.pose.covariance.at(11) = sigma_(1, 2);
+    rpose.pose.covariance.at(30) = sigma_(2, 0);
+    rpose.pose.covariance.at(31) = sigma_(2, 1);
+    rpose.pose.covariance.at(35) = sigma_(2, 2);
     return rpose;
 }
 

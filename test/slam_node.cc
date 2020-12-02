@@ -154,6 +154,7 @@ void LaserCallback(const sensor_msgs::LaserScanConstPtr& laser_ptr )
         
         /* publish  robot pose */
         geometry_msgs::PoseWithCovarianceStamped pose = g_slam->toRosPose(); // pose的协方差在rviz也做了放大
+        pose.header.stamp = laser_ptr->header.stamp;
         g_robot_pose_pub.publish(pose);
 
         /* publish path */
@@ -170,11 +171,12 @@ void EncoderCallback ( const nav_msgs::OdometryConstPtr& en_ptr )
         g_slam->addEncoder(en_ptr);
         
         /* publish  landmarks */
-        visualization_msgs::MarkerArray markers = g_slam->toRosMarkers(3.5); // 为了方便显示协方差做了放大
-        g_landmark_pub.publish(markers);
+        // visualization_msgs::MarkerArray markers = g_slam->toRosMarkers(3.5); // 为了方便显示协方差做了放大
+        // g_landmark_pub.publish(markers);
         
         /* publish  robot pose */
         geometry_msgs::PoseWithCovarianceStamped pose = g_slam->toRosPose(); // pose的协方差在rviz也做了放大
+        pose.header.stamp = en_ptr->header.stamp;
         g_robot_pose_pub.publish(pose);
     }
     

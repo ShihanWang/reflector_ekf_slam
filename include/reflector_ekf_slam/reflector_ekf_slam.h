@@ -117,6 +117,7 @@ private:
     bool getObservations(const sensor_msgs::LaserScan& msg, Observation& obs);
     void normAngle(double& angle);
     matched_ids detectMatchedIds(const Observation& obs);
+    void predict(const double& dt);
 
     double reflector_length_error_ = 0.02;
     double reflector_min_length_ = 0.3;
@@ -125,7 +126,7 @@ private:
     nav_msgs::Path ekf_path_;
     
     /* 系统配置参数 */
-    double wt_, vt_; // 里程计参数
+    double wt_ = 0.0, vt_ = 0.0; // 里程计参数
     Eigen::Vector3d lidar_to_base_link_; // 机器人外参数
     Eigen::Matrix2d Qu_; // 里程计协方差参数
     Eigen::Matrix2d Qt_; // 观测协方差参数
