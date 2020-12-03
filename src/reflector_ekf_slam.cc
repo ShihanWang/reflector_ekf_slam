@@ -87,7 +87,7 @@ void ReflectorEKFSLAM::predict(const double& dt)
     /***** 更新协方差 *****/
     /* 构造 Gt */
     const double angular_half_delta =  mu_(2) + delta_theta / 2;
-    Eigen::MatrixXd G_xi = Eigen::MatrixXd::Zero(N, 3);
+    Eigen::MatrixXd G_xi = Eigen::MatrixXd::Identity(N, N);
 
     Eigen::Matrix3d G_xi_2 = Eigen::Matrix3d::Identity();
     G_xi_2(0, 2) = -vt_ * dt * std::sin(angular_half_delta);
