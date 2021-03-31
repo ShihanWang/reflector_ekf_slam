@@ -12,10 +12,15 @@ find_package(catkin REQUIRED COMPONENTS
   roslib
   sensor_msgs
   std_msgs
+  pcl_ros
 )
 catkin_package()
 
-find_package(Eigen3  REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(PCL REQUIRED)
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 
 include_directories(
 ${catkin_INCLUDE_DIRS}

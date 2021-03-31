@@ -11,10 +11,10 @@ ReflectorEKFSLAM::ReflectorEKFSLAM (const double &time, const double &x0, const 
     mu_ = Eigen::Vector3d::Zero();
     mu_.topRows(3) = init_pose_;
     sigma_.resize(3, 3);
-    sigma_.setZero();   
+    sigma_.setZero();
     Qu_ << 0.02 * 0.02, 0.f, 0.f, 0.034 * 0.034;
-    Qt_ << 0.03 * 0.03, 0.f, 0.f, 0.03 * 0.03; 
-    lidar_to_base_link_ << 0.41589, 0.25639, 0.0;
+    Qt_ << 0.03 * 0.03, 0.f, 0.f, 0.03 * 0.03;
+    lidar_to_base_link_ << 0.13686, 0.0, 0.0;
 }
 
 ReflectorEKFSLAM::~ReflectorEKFSLAM()
@@ -23,16 +23,16 @@ ReflectorEKFSLAM::~ReflectorEKFSLAM()
     {
         // write data
         std::ofstream out(map_path_.c_str(), std::ios::in);
-        if(!map_.reflector_map_.empty())  
+        if(!map_.reflector_map_.empty())
         {
             for(int i = 0; i < map_.reflector_map_.size(); ++i)
             {
                 if( i != map_.reflector_map_.size()- 1)
                     out << map_.reflector_map_[i].x() << "," << map_.reflector_map_[i].y() << ",";
                 else
-                    out << map_.reflector_map_[i].x() << "," << map_.reflector_map_[i].y();                
+                    out << map_.reflector_map_[i].x() << "," << map_.reflector_map_[i].y();
             }
-        } 
+        }
         if(mu_.rows() > 3)
         {
             out << ",";
@@ -42,11 +42,11 @@ ReflectorEKFSLAM::~ReflectorEKFSLAM()
                 if(i != N - 1)
                     out << mu_(3 + 2 * i) << "," << mu_(3 + 2 * i + 1) << ",";
                 else
-                    out << mu_(3 + 2 * i) << "," << mu_(3 + 2 * i + 1);  
+                    out << mu_(3 + 2 * i) << "," << mu_(3 + 2 * i + 1);
             }
         }
         out << std::endl;
-        if(!map_.reflector_map_.empty())  
+        if(!map_.reflector_map_.empty())
         {
             for(int i = 0; i < map_.reflector_map_.size(); ++i)
             {
@@ -55,9 +55,9 @@ ReflectorEKFSLAM::~ReflectorEKFSLAM()
                         << map_.reflector_map_coviarance_[i](1,0) << "," << map_.reflector_map_coviarance_[i](1,1) << ",";
                 else
                     out << map_.reflector_map_coviarance_[i](0,0) << "," << map_.reflector_map_coviarance_[i](0,1) << ","
-                        << map_.reflector_map_coviarance_[i](1,0) << "," << map_.reflector_map_coviarance_[i](1,1);                
+                        << map_.reflector_map_coviarance_[i](1,0) << "," << map_.reflector_map_coviarance_[i](1,1);
             }
-        } 
+        }
         if(mu_.rows() > 3)
         {
             out << ",";
@@ -69,7 +69,7 @@ ReflectorEKFSLAM::~ReflectorEKFSLAM()
                         << sigma_.block(3 + 2 * i, 3 + 2 * i, 2, 2)(1,0) << "," << sigma_.block(3 + 2 * i, 3 + 2 * i, 2, 2)(1,1) << ",";
                 else
                     out << sigma_.block(3 + 2 * i, 3 + 2 * i, 2, 2)(0,0) << "," << sigma_.block(3 + 2 * i, 3 + 2 * i, 2, 2)(0,1) << ","
-                        << sigma_.block(3 + 2 * i, 3 + 2 * i, 2, 2)(1,0) << "," << sigma_.block(3 + 2 * i, 3 + 2 * i, 2, 2)(1,1); 
+                        << sigma_.block(3 + 2 * i, 3 + 2 * i, 2, 2)(1,0) << "," << sigma_.block(3 + 2 * i, 3 + 2 * i, 2, 2)(1,1);
             }
         }
         out << std::endl;
@@ -91,7 +91,7 @@ void ReflectorEKFSLAM::predict(const double& dt)
 
     Eigen::Matrix3d G_xi_2 = Eigen::Matrix3d::Identity();
     G_xi_2(0, 2) = -vt_ * dt * std::sin(angular_half_delta);
-    G_xi_2(1, 2) = vt_ * dt * std::cos(angular_half_delta); 
+    G_xi_2(1, 2) = vt_ * dt * std::cos(angular_half_delta);
     G_xi.block(0,0,3,3) = G_xi_2;
 
     /* 构造 Gu' */
@@ -116,8 +116,8 @@ void ReflectorEKFSLAM::addEncoder (const nav_msgs::Odometry::ConstPtr &odometry)
     /***** 保存上一帧编码器数据 *****/
     wt_ = odometry->twist.twist.angular.z;
     vt_ = odometry->twist.twist.linear.x;
-    const double dt = now_time - time_;   
-    predict(dt); 
+    const double dt = now_time - time_;
+    predict(dt);
     // const double delta_theta = wt_ * dt;
     // const double delta_x = vt_ * dt * std::cos(mu_(2) + delta_theta / 2);
     // const double delta_y = vt_ * dt * std::sin(mu_(2) + delta_theta / 2);
@@ -130,7 +130,7 @@ void ReflectorEKFSLAM::addEncoder (const nav_msgs::Odometry::ConstPtr &odometry)
 
     // Eigen::Matrix3d G_xi_2 = Eigen::Matrix3d::Identity();
     // G_xi_2(0, 2) = -vt_ * dt * std::sin(angular_half_delta);
-    // G_xi_2(1, 2) = vt_ * dt * std::cos(angular_half_delta); 
+    // G_xi_2(1, 2) = vt_ * dt * std::cos(angular_half_delta);
     // G_xi.block(0,0,3,3) = G_xi_2;
 
     // /* 构造 Gu' */
@@ -145,7 +145,8 @@ void ReflectorEKFSLAM::addEncoder (const nav_msgs::Odometry::ConstPtr &odometry)
     // /***** 更新均值 *****/
     // mu_.topRows(3) += Eigen::Vector3d(delta_x, delta_y, delta_theta);
     // mu_(2) = std::atan2(std::sin(mu_(2)), std::cos(mu_(2))); //norm
-    std::cout << "Predict covariance is: \n" << sigma_ << std::endl;
+
+    //std::cout << "Predict covariance is: \n" << sigma_ << std::endl;
     time_ = now_time;
 }
 
@@ -168,7 +169,7 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
 
     // Eigen::Matrix3d G_xi_2 = Eigen::Matrix3d::Identity();
     // G_xi_2(0, 2) = -vt_ * dt * std::sin(angular_half_delta);
-    // G_xi_2(1, 2) = vt_ * dt * std::cos(angular_half_delta); 
+    // G_xi_2(1, 2) = vt_ * dt * std::cos(angular_half_delta);
     // G_xi.block(0,0,3,3) = G_xi_2;
 
     // /* 构造 Gu' */
@@ -184,19 +185,25 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     // mu_.topRows(3) += Eigen::Vector3d(delta_x, delta_y, delta_theta);
     // mu_(2) = std::atan2(std::sin(mu_(2)), std::cos(mu_(2))); //norm
     time_ = now_time;
-    std::cout << "Predict now pose is: " << mu_(0) << "," << mu_(1) << "," << mu_(2) << std::endl;
+    std::cout << "  ↓↓↓-----------------------------------\n" <<
+                 "Predict now pose is: " << mu_(0) << "," << mu_(1) << "," << mu_(2) << std::endl;
     std::cout << "Predict now covariance is: \n" << sigma_ << std::endl;
+
+    // 完成反光板点云提取
     Observation observation;
     if(!getObservations(*scan, observation))
     {
         std::cout << "do not have detect any reflector" << std::endl;
         return;
     }
+
+    //
     matched_ids result = detectMatchedIds(observation);
     const int M_ = result.map_obs_match_ids.size();
     const int M = result.state_obs_match_ids.size();
     std::cout << "Match with old map size is: " << M_ << std::endl;
     std::cout << "Match with state vector size is: " << M << std::endl;
+
     const int MM = M + M_;
     if(MM > 0)
     {
@@ -262,7 +269,7 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
         mu_(2) = std::atan2(std::sin(mu_(2)), std::cos(mu_(2)));
         sigma_ = sigma_ - K_t * H_t * sigma_;
     }
-    
+
     const int N2 = result.new_ids.size();
     if(N2 > 0)
     {
@@ -310,6 +317,7 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     std::cout << "Update now pose is: " << mu_(0) << "," << mu_(1) << "," << mu_(2) << std::endl;
     std::cout << "state vector:  \n" << mu_ << std::endl;
     std::cout << "covariance is:  \n" << sigma_ << std::endl;
+
     ekf_path_.header.stamp = scan->header.stamp;
     ekf_path_.header.frame_id = "world";
     geometry_msgs::PoseStamped pose;
@@ -347,7 +355,7 @@ bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observ
     Eigen::Vector2f now_center(0.f, 0.f);
     // All laser scan points in global frame
     PointCloud point_cloud;
-   
+
     float angle = msg.angle_min;
 
     auto point_transformed = [&](const Eigen::Vector2f& p) -> Eigen::Vector2f{
@@ -357,10 +365,12 @@ bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observ
     };
 
     // Detect reflectors and motion distortion correction hear
+    // 反光板点云提取部分
     for (int i = 0; i < msg.ranges.size(); ++i)
     {
         // Get range data
         const float range = msg.ranges[i];
+        // 只处理有效距离[range_min,range_max]范围用内的点云
         if (msg.range_min <= range && range <= msg.range_max)
         {
             // Get now point xy value in sensor frame
@@ -370,6 +380,7 @@ bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observ
 
             // Detect reflector
             const double intensity = msg.intensities[i];
+            // 通过强度阈值来提取来自反光板的点云
             if (intensity > intensity_min_)
             {
                 // Add the first point
@@ -381,38 +392,48 @@ bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observ
                 }
                 else
                 {
-                    const int last_id = reflector_id.back();
+                    const int last_id = reflector_id.back();// 取得上一个点云的id
                     // Add connected points
+                    // 若点云强度是连续很高,则认为是来自同一块反光板的点云(这里假定反光板反射回的点云总是大于强度阈值且连续成片)
                     if (i - last_id == 1)
                     {
                         reflector.push_back(point_cloud.back());
                         reflector_id.push_back(i);
-                        now_center += point_cloud.back();
+                        now_center += point_cloud.back();// 累加点云,用于求和取平均
                     }
                     else
                     {
                         // Calculate reflector length
+                        // 当下一帧高强度点云不是连续的,表明一块反光板上的点云已经检索完毕
+                        // 此时,front和back的点云代表这块反光板的第一个点和最后一个点
+                        // 求取位移差=检测到的反光板宽度
                         const float reflector_length = std::hypotf(reflector.front().x() - reflector.back().x(),
                                                                 reflector.front().y() - reflector.back().y());
                         // Add good reflector and its center
+                        // 允许检测出的反光板宽度误差在 reflector_length_error 设定的误差范围内
                         if (fabs(reflector_length - reflector_min_length_) < reflector_length_error_)
                         {
-                            reflector_points.push_back(reflector);
-                            centers.push_back(now_center / reflector.size());
+                            reflector_points.push_back(reflector);// 存入反光板点云
+                            centers.push_back(now_center / reflector.size());// 求平均 获得反光板点云的中心点位置
                         }
                         // Update now reflector
+                        // 清除缓存,准备下一个反光板点云的存储
                         reflector.clear();
                         reflector_id.clear();
                         now_center.setZero(2);
+                        // 保存当前反光板点云
                         reflector_id.push_back(i);
                         reflector.push_back(point_cloud.back());
                         now_center += point_cloud.back();
+                        std::cout << "\n reflector +1";
                     }
                 }
             }
         }
+        // 一个点云判断完毕,下一个点云角度按照角度分辨率增加
         angle += msg.angle_increment;
     }
+    // 处理可能刚好在scan最后的 反光板点云
     if (!reflector.empty())
     {
         const float reflector_length = std::hypotf(reflector.front().x() - reflector.back().x(),
@@ -423,11 +444,13 @@ bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observ
             centers.push_back(now_center / reflector.size());
         }
     }
+
     if(centers.empty())
         return false;
     obs.time_ = msg.header.stamp.toSec();
     obs.cloud_ = centers;
-    std::cout << "detect " << obs.cloud_.size() << " reflectors" << std::endl;
+    // 输出检测到的反光板个数
+    std::cout << "\n detected " << obs.cloud_.size() << " reflectors" << std::endl;
     return true;
 }
 
@@ -441,7 +464,7 @@ visualization_msgs::MarkerArray ReflectorEKFSLAM::toRosMarkers(double scale)
         std::cout << "no reflector " << std::endl;
         return markers;
     }
-        
+
     const int M = (N - 3) / 2;
     std::cout << "now reflector size is : " << M << std::endl;
     for(int i = 0; i < M; i++)
@@ -454,20 +477,20 @@ visualization_msgs::MarkerArray ReflectorEKFSLAM::toRosMarkers(double scale)
 
         /* 计算地图点的协方差椭圆角度以及轴长 */
         Eigen::Matrix2d sigma_m = sigma_.block(id, id, 2, 2); //协方差
-        std::cout << "cov: \n" << sigma_m <<std::endl;
+        //std::cout << "cov: \n" << sigma_m <<std::endl;
         // Calculate Eigen Value(D) and Vectors(V), simga_m = V * D * V^-1
         // D = | D1 0  |  V = |cos  -sin|
         //     | 0  D2 |      |sin  cos |
         Eigen::EigenSolver<Eigen::Matrix2d> eigen_solver(sigma_m);
         const auto eigen_value = eigen_solver.pseudoEigenvalueMatrix();
         const auto eigen_vector = eigen_solver.pseudoEigenvectors();
-        // Calculate angle and x y 
+        // Calculate angle and x y
         const double angle = std::atan2(eigen_vector(1, 0), eigen_vector(0, 0));
         const double x_len = 2 * std::sqrt(eigen_value(0, 0) * 5.991);
         const double y_len = 2 * std::sqrt(eigen_value(1, 1) * 5.991);
         std::cout << "x_len: " << x_len << std::endl;
         std::cout << "y_len: " << y_len << std::endl;
-        
+
         /* 构造marker */
         visualization_msgs::Marker marker;
         marker.header.frame_id = "world";
@@ -490,10 +513,10 @@ visualization_msgs::MarkerArray ReflectorEKFSLAM::toRosMarkers(double scale)
         marker.color.r = 0.0;
         marker.color.g = 1.0;
         marker.color.b = 0.0;
-        
+
         markers.markers.push_back(marker);
     }// for all mpts
-    
+
     return markers;
 }
 
@@ -502,14 +525,14 @@ geometry_msgs::PoseWithCovarianceStamped ReflectorEKFSLAM::toRosPose()
     /* 转换带协方差的机器人位姿 */
     geometry_msgs::PoseWithCovarianceStamped rpose;
     rpose.header.frame_id = "world";
-    
+
     rpose.pose.pose.position.x = mu_(0);
     rpose.pose.pose.position.y = mu_(1);
     rpose.pose.pose.orientation.x = 0.0;
     rpose.pose.pose.orientation.y = 0.0;
     rpose.pose.pose.orientation.z = std::sin(mu_(2) / 2);
     rpose.pose.pose.orientation.w = std::cos(mu_(2) / 2);
-    
+
     rpose.pose.covariance.at(0) = sigma_(0, 0);
     rpose.pose.covariance.at(1) = sigma_(0, 1);
     rpose.pose.covariance.at(5) = sigma_(0, 2);
@@ -544,14 +567,17 @@ matched_ids ReflectorEKFSLAM::detectMatchedIds(const Observation& obs)
     {
         for (int i = 0; i < obs.cloud_.size(); ++i)
             ids.new_ids.push_back(i);
+
+        std::cout << "\n >>>Reflector map is empty.";
         return ids;
     }
 
     auto point_transformed = [&](const Eigen::Vector2f& p) -> Eigen::Vector2f{
-        const float x = p.x() * std::cos(mu_(2)) + p.y() * std::sin(mu_(2)) + mu_(0);
-        const float y = -p.x() * std::sin(mu_(2)) + p.y() * std::cos(mu_(2)) + mu_(1);
+        const float x = p.x() * std::cos(mu_(2)) - p.y() * std::sin(mu_(2)) + mu_(0);
+        const float y = p.x() * std::sin(mu_(2)) + p.y() * std::cos(mu_(2)) + mu_(1);
         return Eigen::Vector2f(x,y);
     };
+
     const int M = (mu_.rows() - 3) / 2;
     const int M_ = map_.reflector_map_.size();
     for(int i = 0; i < obs.cloud_.size(); ++i)
@@ -593,16 +619,17 @@ matched_ids ReflectorEKFSLAM::detectMatchedIds(const Observation& obs)
                 const Eigen::Vector2f delta_state = reflector - global_reflector;
                 const auto delta_double_state = delta_state.cast<double>().transpose();
                 // Calculate Ma distance
-                const double dist = std::sqrt(delta_double_state * sigma * delta_double_state.transpose());
+                // const double dist = std::sqrt(delta_double_state * sigma * delta_double_state.transpose());
+                const double dist = std::sqrt(delta_double_state * delta_double_state.transpose());
                 distance_id.push_back({dist, j});
             }
             std::sort(distance_id.begin(), distance_id.end(),
                     [](const std::pair<double, int> &left,
                         const std::pair<double, int> &right) {
-                        return left.second <= right.second;
+                        return left.first <= right.first;
                     });
             const auto best_match = distance_id.front();
-            if (best_match.first < 0.05)
+            if (best_match.first < 0.1)
             {
                 ids.state_obs_match_ids.push_back({i, best_match.second});
                 continue;
