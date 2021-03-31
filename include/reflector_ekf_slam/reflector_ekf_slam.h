@@ -95,7 +95,7 @@ class ReflectorEKFSLAM
     ~ReflectorEKFSLAM();
     void addEncoder(const nav_msgs::Odometry::ConstPtr &odometry); //加入编码器数据进行运动更新
     void addLaser(const sensor_msgs::LaserScan::ConstPtr& scan);
-    
+
     void loadFromVector(const std::vector<std::vector<double>>& vecs);
     void setSaveMapPath(const std::string& path)
     {
@@ -104,33 +104,33 @@ class ReflectorEKFSLAM
 
     visualization_msgs::MarkerArray toRosMarkers(double scale); //将路标点转换成ROS的marker格式，用于发布显示
     geometry_msgs::PoseWithCovarianceStamped toRosPose(); //将机器人位姿转化成ROS的pose格式，用于发布显示
-    
+
     nav_msgs::Path& path(){
         return ekf_path_;}
     Eigen::VectorXd& mu(){
         return mu_;}
     Eigen::MatrixXd& sigma(){
         return sigma_;}
-    
+
 private:
-    
+
     bool getObservations(const sensor_msgs::LaserScan& msg, Observation& obs);
     void normAngle(double& angle);
     matched_ids detectMatchedIds(const Observation& obs);
     void predict(const double& dt);
 
-    double reflector_length_error_ = 0.02;
-    double reflector_min_length_ = 0.3;
-    double intensity_min_ = 700.0;
-    
+    double reflector_length_error_ = 0.06;
+    double reflector_min_length_ = 0.18;//0.3
+    double intensity_min_ = 155.0;//700
+
     nav_msgs::Path ekf_path_;
-    
+
     /* 系统配置参数 */
     double wt_ = 0.0, vt_ = 0.0; // 里程计参数
     Eigen::Vector3d lidar_to_base_link_; // 机器人外参数
     Eigen::Matrix2d Qu_; // 里程计协方差参数
     Eigen::Matrix2d Qt_; // 观测协方差参数
-       
+
     /* 求解的扩展状态 均值 和 协方差 */
     Eigen::VectorXd mu_; //均值
     Eigen::MatrixXd sigma_; //方差
