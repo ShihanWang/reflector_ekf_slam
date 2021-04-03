@@ -121,7 +121,9 @@ private:
 
     double reflector_length_error_ = 0.06;
     double reflector_min_length_ = 0.18;//0.3
-    double intensity_min_ = 155.0;//700
+    double intensity_min_ = 200.0;//700
+    // double reflector_min_length_ = 0.3;//0.3
+    // double intensity_min_ = 700.0;//700
 
     nav_msgs::Path ekf_path_;
 
