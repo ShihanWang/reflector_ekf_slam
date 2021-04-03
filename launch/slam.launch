@@ -14,11 +14,11 @@
     <param name="start_pose" value="0.0,0.0,0.0" type="str" />
     <param name="map_path" value="$(find reflector_ekf_slam)/test.txt" type="str"/>
 
-  <node name="playbag" pkg="rosbag" type="play" launch-prefix="gnome-terminal -x"
+  <!-- <node name="playbag" pkg="rosbag" type="play" launch-prefix="gnome-terminal -x"
         args="$(arg bag) --clock --pause -r $(arg rate) -s $(arg start) -u $(arg dur)
               --topics $(arg odom) $(arg laser) $(arg tf)" />
 
   <node pkg="rviz" type="rviz" name="rviz" output="screen"
-    args="-d $(find reflector_ekf_slam)/rviz/default.rviz" required="true">
+    args="-d $(find reflector_ekf_slam)/rviz/default.rviz" required="true"> -->
 
 </launch>
