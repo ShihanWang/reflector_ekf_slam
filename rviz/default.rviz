@@ -5,9 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /Pose1
         - /PoseWithCovariance1/Covariance1
-        - /LaserScan1
         - /Axes1
       Splitter Ratio: 0.669444442
     Tree Height: 775
@@ -50,7 +48,7 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 20
+      Plane Cell Count: 200
       Reference Frame: <Fixed Frame>
       Value: true
     - Alpha: 1
@@ -130,7 +128,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 255
@@ -147,7 +145,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -217,7 +215,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: 0
+      Angle: -1.57999921
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
@@ -227,11 +225,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 88.2684555
+      Scale: 35.3616142
       Target Frame: <Fixed Frame>
       Value: TopDownOrtho (rviz)
-      X: 0.889361799
-      Y: 0.727457225
+      X: 9.22242928
+      Y: -0.730593145
     Saved: ~
 Window Geometry:
   Displays:

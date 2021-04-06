@@ -3,6 +3,20 @@
 **需要注意的是**：
 由于本人懒，所以本框架在[aruco_ekf_slam](https://github.com/ydsf16/aruco_ekf_slam)基础上根据自己的公式进行了重构和优化。
 
+## demo运行方法
+
+- 默认参数启动
+```
+roslaunch reflector_ekf_slam slam.launch bag:=${HOME}/res_ws/src/reflector_ekf_slam/dataset/reflector_2d_long_2021-03-30-19-13-53.bag
+```
+- launch命令可调参数示例
+```
+roslaunch reflector_ekf_slam slam.launch bag:=${HOME}/res_ws/src/reflector_ekf_slam/dataset/reflector_2d_long_2021-03-30-19-13-53.bag start:=40 dur:=60 rate:=2 rviz:=false laser:=/scan
+```
+上述命令解释:
+将bag包从第40s开始播放,只播放60s就停止,以2倍速播放,不显示rviz,激光话题名重映射为 /scan
+上述变量不写时,将按照launch文件里的默认参数启动
+
 # 重要更新
 
 ## 基本EKF建图定位框架搭建-2020.11.21
