@@ -119,11 +119,13 @@ private:
     matched_ids detectMatchedIds(const Observation& obs);
     void predict(const double& dt);
 
+    const double range_min_ = 0.3;// 只取反射回的激光数据中 大于0.3米的点云
+    const double range_max_ = 10.0;// 只取反射回的激光数据中 小于10.0米的点云
     double reflector_length_error_ = 0.06;
-    double reflector_min_length_ = 0.18;//0.3
-    double intensity_min_ = 200.0;//700
-    // double reflector_min_length_ = 0.3;//0.3
-    // double intensity_min_ = 700.0;//700
+    double reflector_min_length_ = 0.18;
+    double intensity_min_ = 200.0;
+    // double reflector_min_length_ = 0.3;
+    // double intensity_min_ = 700.0;
 
     nav_msgs::Path ekf_path_;
 

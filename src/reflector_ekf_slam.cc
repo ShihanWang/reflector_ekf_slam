@@ -192,7 +192,7 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     Observation observation;
     if(!getObservations(*scan, observation))
     {
-        std::cout << "do not have detect any reflector" << std::endl;
+        std::cout << "\n do not have detect any reflector" << std::endl;
         return;
     }
 
@@ -316,7 +316,7 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
         tmp_sigma.block(N , 0, 2 * N2, N) = sigma_mx;
         tmp_sigma.block(0, N , N, 2 * N2) = sigma_mx.transpose();
         tmp_sigma.block(N, N, 2 * N2, 2 * N2) = sigma_mm;
-        
+
         sigma_.resize(M_e, M_e);
         sigma_ = tmp_sigma;
         mu_.resize(M_e);
@@ -373,12 +373,16 @@ bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observ
 
     // Detect reflectors and motion distortion correction hear
     // 反光板点云提取部分
-    for (int i = 0; i < msg.ranges.size(); ++i)
+    int points_number = msg.ranges.size();
+    for (int i = 0; i < points_number; ++i)
     {
         // Get range data
         const float range = msg.ranges[i];
-        // 只处理有效距离[range_min,range_max]范围用内的点云
-        if (msg.range_min <= range && range <= msg.range_max)
+        // 间隙点云是否存在的标志位
+        char detected_gap = false;
+        // 只处理距离在[range_min_,range_max_]范围用内的点云
+        // 因为当反光板距离激光较远时,激光能扫到的反光板点云数量很少,极不稳定。所以只考虑近距离内的反光板点云
+        if (range_min_ <= range && range <= range_max_)
         {
             // Get now point xy value in sensor frame
             Eigen::Vector2f now_point(range * std::cos(angle), range * std::sin(angle));
@@ -408,30 +412,67 @@ bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observ
                         reflector_id.push_back(i);
                         now_center += point_cloud.back();// 累加点云,用于求和取平均
                     }
+                    // 反光板间隙点云检测部分
+                    // 因为点云的强度值影响因素很多,有可能一条反光板点云的中间会有某几个点强度较低
+                    // 这样会造成1块反光板检测为多块 或者 1块反光板检测出来缺失一部分,从而影响同一反光板的中心点计算
                     else
                     {
-                        // Calculate reflector length
-                        // 当下一帧高强度点云不是连续的,表明一块反光板上的点云已经检索完毕
-                        // 此时,front和back的点云代表这块反光板的第一个点和最后一个点
-                        // 求取位移差=检测到的反光板宽度
-                        const float reflector_length = std::hypotf(reflector.front().x() - reflector.back().x(),
-                                                                reflector.front().y() - reflector.back().y());
-                        // Add good reflector and its center
-                        // 允许检测出的反光板宽度误差在 reflector_length_error 设定的误差范围内
-                        if (fabs(reflector_length - reflector_min_length_) < reflector_length_error_)
+                        // 若与上一个反光板点云相差最多3个点 且 当前点与之前的点在同一平面 且 当前点的下一个点也是高强度点云
+                        // 则认为是反光板中间部分的弱强度点云,即间隙点云
+                        if (i - last_id < 4 && fabs(msg.ranges[i] - msg.ranges[last_id]) < 0.3
+                            && msg.intensities[i+1 < points_number ? i+1:i] > intensity_min_)
                         {
-                            reflector_points.push_back(reflector);// 存入反光板点云
-                            centers.push_back(now_center / reflector.size());// 取平均获得反光板点云的中心点
+                            // 存储反光板中的间隙点云
+                            int j = last_id+1;
+                            for(; j < i; ++j)
+                            {
+                                const float range_gap = msg.ranges[j];
+                                const float angle_gap = angle - msg.angle_increment*(i - j);
+                                if(std::isinf(range_gap))// scan中很可能存在inf值
+                                    continue;
+                                // std::cout << "\n!!!!!!!!!!!!\n"<< "points_number=" << points_number << " i=" << i << " j=" << j << "\n";
+                                // std::cout << range_gap << " -- " << angle_gap;
+                                Eigen::Vector2f gap_point(range_gap * std::cos(angle_gap), range_gap * std::sin(angle_gap));
+                                gap_point = point_transformed_to_base_link(gap_point);
+                                reflector.push_back(gap_point);
+                                reflector_id.push_back(j);
+                                now_center += gap_point;
+                            }
+                            // 存储当前反光板中正常的高强度点云
+                            detected_gap = true;
+                            std::cout << "\n>>>gap_points of reflector detected! now add it back.";
+                            reflector.push_back(point_cloud.back());
+                            reflector_id.push_back(i);
+                            now_center += point_cloud.back();
                         }
-                        // Update now reflector
-                        // 清楚缓存,开始下一个反光板点云的存储
-                        reflector.clear();
-                        reflector_id.clear();
-                        now_center.setZero(2);
-                        // 保存当前高强度点云
-                        reflector_id.push_back(i);
-                        reflector.push_back(point_cloud.back());
-                        now_center += point_cloud.back();
+
+                        if(!detected_gap)
+                        {
+                            // Calculate reflector length
+                            // 当下一帧高强度点云不是连续的,表明一块反光板上的点云已经检索完毕
+                            // 此时,front和back的点云代表这块反光板的第一个点和最后一个点
+                            // 求取位移差=检测到的反光板宽度
+                            const float reflector_length = std::hypotf(reflector.front().x() - reflector.back().x(),
+                                                                    reflector.front().y() - reflector.back().y());
+                            // Add good reflector and its center
+                            // 允许检测出的反光板宽度误差在 reflector_length_error 设定的误差范围内
+                            if (fabs(reflector_length - reflector_min_length_) < reflector_length_error_)
+                            {
+                                reflector_points.push_back(reflector);// 存入反光板点云
+                                centers.push_back(now_center / reflector.size());// 求平均 获得反光板点云的中心点位置
+                            }
+                            // Update now reflector
+                            // 清除缓存,准备下一个反光板点云的存储
+                            reflector.clear();
+                            reflector_id.clear();
+                            now_center.setZero(2);
+                            // 当前反光板点云就是 下一个反光板的第一个点
+                            reflector_id.push_back(i);
+                            reflector.push_back(point_cloud.back());
+                            now_center += point_cloud.back();
+                            point_cloud.clear();// 防止内存占用一直增加
+                            std::cout << "\n reflector +1";
+                        }
                     }
                 }
             }
@@ -456,7 +497,7 @@ bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observ
     obs.time_ = msg.header.stamp.toSec();
     obs.cloud_ = centers;
     // 输出检测到的反光板个数
-    std::cout << "detect " << obs.cloud_.size() << " reflectors" << std::endl;
+    std::cout << "\n detected " << obs.cloud_.size() << " reflectors" << std::endl;
     return true;
 }
 
