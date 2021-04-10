@@ -4,24 +4,30 @@
   <arg name="dur" default="100000"/>
   <arg name="rate" default="1"/>
   <arg name = "odom" default = "/odom"/>
-  <arg name = "laser" default = "/scan"/>
+  <arg name = "scan" default = "/scan"/>
+  <arg name = "points" default = "/velodyne_points"/>
   <arg name = "tf" default = "/tf"/>
   <arg name = "rviz" default = "true"/>
-  <param name="/use_sim_time" value="true" />
+  <arg name = "use_3d" default = "false"/>
 
-  <node name="slam_node" pkg="reflector_ekf_slam" type="slam_node" cwd="node" output="screen" />
-    <param name="laser" value="scan" type="str" />
-    <param name="odom"  value="odom" type="str" />
-    <param name="start_pose" value="0.0,0.0,0.0" type="str" />
-    <param name="map_path" value="$(find reflector_ekf_slam)/test.txt" type="str"/>
+  <param name="/use_sim_time" value="true" />
+  <param name="odom" value="$(arg odom)"/>
+  <param name="scan" value="$(arg scan)"/>
+  <param name="points" value="$(arg points)"/>
+  <param name="start_pose" value="0.0,0.0,0.0" type="str" />
+  <param name="map_path" value="$(find reflector_ekf_slam)/test.txt" type="str"/>
+  <param name="use_3d" value="$(arg use_3d)" />
+
+  <node name="slam_node" pkg="reflector_ekf_slam" type="slam_node"
+        cwd="node" output="screen" required="true"/>
 
   <node name="playbag" pkg="rosbag" type="play" launch-prefix="gnome-terminal -x"
         args="$(arg bag) --clock --pause -r $(arg rate) -s $(arg start) -u $(arg dur)
-              --topics $(arg odom) $(arg laser) $(arg tf)" />
+                         --topics $(arg odom) $(arg scan) $(arg points) $(arg tf)" />
 
   <group if = "$(arg rviz)">
-    <node pkg="rviz" type="rviz" name="rviz" output="screen"
-          args="-d $(find reflector_ekf_slam)/rviz/default.rviz" required="true"/>
+    <node pkg="rviz" type="rviz" name="rviz" output="screen" required="true"
+          args="-d $(find reflector_ekf_slam)/rviz/default.rviz"/>
   </group>
 
 </launch>
