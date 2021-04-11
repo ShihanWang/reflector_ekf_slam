@@ -147,11 +147,8 @@ private:
     const double range_max_ = 10.0;// 只取反射回的激光数据中 小于10.0米的点云
     double reflector_length_error_ = 0.06;
     double reflector_min_length_ = 0.18;
-<<<<<<< 63a8c072da62114a04c5ea4a4c3b2812e9a58985
-    double intensity_min_ = 200.0;
-=======
+    // add 3D reflector points detect methods;update readme
     double intensity_min_ = 160.0;
->>>>>>> add 3D reflector points detect methods;update readme
     // double reflector_min_length_ = 0.3;
     // double intensity_min_ = 700.0;
 
