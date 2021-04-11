@@ -149,7 +149,171 @@ void ReflectorEKFSLAM::addEncoder (const nav_msgs::Odometry::ConstPtr &odometry)
     time_ = now_time;
 }
 
-void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
+void ReflectorEKFSLAM::addPoints(const sensor_msgs::PointCloud2ConstPtr& points)
+{
+    const double now_time = points->header.stamp.toSec();
+    const double dt = now_time - time_;
+
+    // Predict now pose
+    const int N = mu_.rows();
+    predict(dt);
+    time_ = now_time;
+    std::cout << "  ↓↓↓-----------------------------------\n" <<
+                 "Predict now pose is: " << mu_(0) << "," << mu_(1) << "," << mu_(2) << std::endl;
+    std::cout << "Predict now covariance is: \n" << sigma_ << std::endl;
+
+    // 完成基于3D点云的反光板提取
+    Observation observation;
+    if(!getObservations(*points, observation))
+    {
+        std::cout << "do not have detect any reflector" << std::endl;
+        return;
+    }
+
+    matched_ids result = detectMatchedIds(observation);
+    const int M_ = result.map_obs_match_ids.size();
+    const int M = result.state_obs_match_ids.size();
+    std::cout << "Match with old map size is: " << M_ << std::endl;
+    std::cout << "Match with state vector size is: " << M << std::endl;
+    const int MM = M + M_;
+    if(MM > 0)
+    {
+        Eigen::MatrixXd H_t = Eigen::MatrixXd::Zero(2 * MM, N);
+        Eigen::VectorXd zt = Eigen::VectorXd::Zero(2 * MM);
+        Eigen::VectorXd zt_hat = Eigen::VectorXd::Zero(2 * MM);
+        Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(2 * MM, 2 * MM);
+        const double cos_theta = std::cos(mu_(2));
+        const double sin_theta = std::sin(mu_(2));
+        Eigen::Matrix2d B;
+        B << cos_theta, sin_theta, -sin_theta, cos_theta;
+        if(M > 0)
+        {
+            const auto xy = [&](const int &id) -> Eigen::Vector2d {
+                return Eigen::Vector2d(mu_(3 + 2 * id), mu_(3 + 2 * id + 1));
+            };
+            for(int i = 0; i < M; ++i)
+            {
+                const int local_id = result.state_obs_match_ids[i].first;
+                const int global_id = result.state_obs_match_ids[i].second;
+                zt(2 * i) = observation.cloud_[local_id].x();
+                zt(2 * i + 1) = observation.cloud_[local_id].y();
+                const double delta_x = xy(global_id).x() - mu_(0);
+                const double delta_y = xy(global_id).y() - mu_(1);
+                zt_hat(2 * i) = delta_x * cos_theta + delta_y * sin_theta;
+                zt_hat(2 * i + 1) = -delta_x * sin_theta + delta_y * cos_theta;
+                Eigen::MatrixXd A_i(2, 3);
+                A_i << -cos_theta, -sin_theta, -delta_x * sin_theta + delta_y * cos_theta,
+                    sin_theta, -cos_theta, -delta_x * cos_theta - delta_y * sin_theta;
+                H_t.block(2 * i, 0, 2, 3) = A_i;
+                H_t.block(2 * i, 3 + 2 * global_id, 2, 2) = B;
+                Q.block(2 * i, 2 * i, 2, 2) = Qt_;
+            }
+        }
+        if(M_ > 0)
+        {
+            const auto xy = [&](const int &id) -> Eigen::Vector2f {
+                return map_.reflector_map_[id];
+            };
+
+            for(int i = 0; i < M_; ++i)
+            {
+                const int local_id = result.map_obs_match_ids[i].first;
+                const int global_id =result.map_obs_match_ids[i].second;
+                zt(2 * (M + i)) = observation.cloud_[local_id].x();
+                zt(2 * (M + i) + 1) = observation.cloud_[local_id].y();
+                const double delta_x = xy(global_id).x() - mu_(0);
+                const double delta_y = xy(global_id).y() - mu_(1);
+
+                zt_hat(2 * (M + i)) = delta_x * cos_theta + delta_y * sin_theta;
+                zt_hat(2 * (M + i) + 1) = -delta_x * sin_theta + delta_y * cos_theta;
+
+                Eigen::MatrixXd A_i(2, 3);
+                A_i << -cos_theta, -sin_theta, -delta_x * sin_theta + delta_y * cos_theta,
+                    sin_theta, -cos_theta, -delta_x * cos_theta - delta_y * sin_theta;
+                H_t.block(2 * (M + i), 0, 2, 3) = A_i;
+
+                Q.block(2 * (M + i), 2 * (M + i), 2, 2) = Qt_;
+            }
+        }
+        const auto K_t = sigma_ * H_t.transpose() * (H_t * sigma_ * H_t.transpose() + Q).inverse();
+        mu_ += K_t * (zt - zt_hat);
+        mu_(2) = std::atan2(std::sin(mu_(2)), std::cos(mu_(2)));
+        sigma_ = sigma_ - K_t * H_t * sigma_;
+    }
+
+    const int N2 = result.new_ids.size();
+    if(N2 > 0)
+    {
+        std::cout << "Add " << N2 << " reflectors" << std::endl;
+        // increase X_estimate and coviarance size
+        const int M_e = N + 2 * N2;
+        Eigen::VectorXd tmp_xe = Eigen::VectorXd::Zero(M_e);
+        tmp_xe.topRows(N) = mu_.topRows(N);
+
+        Eigen::MatrixXd tmp_sigma = Eigen::MatrixXd::Zero(M_e, M_e);
+        tmp_sigma.block(0, 0, N, N) = sigma_;
+        const Eigen::Matrix3d sigma_xi = sigma_.block(0, 0, 3, 3);
+        const double sin_theta = std::sin(mu_(2));
+        const double cos_theta = std::cos(mu_(2));
+        Eigen::Matrix2d G_zi;
+        G_zi << cos_theta, -sin_theta, sin_theta, cos_theta;
+        auto point_transformed_to_global_frame = [&](const Eigen::Vector2f& p) -> Eigen::Vector2f{
+            const float x = p.x() * std::cos(mu_(2)) - p.y() * std::sin(mu_(2)) + mu_(0);
+            const float y = p.x() * std::sin(mu_(2)) + p.y() * std::cos(mu_(2)) + mu_(1);
+            return Eigen::Vector2f(x,y);
+        };
+        Eigen::MatrixXd G_p(2 * N2, 3);
+        Eigen::MatrixXd G_z(2 * N2, 2);
+        Eigen::MatrixXd G_fx = Eigen::MatrixXd::Zero(2 * N2, N);
+
+        for (int i = 0; i < N2; i++)
+        {
+            const int local_id = result.new_ids[i];
+            const auto point = point_transformed_to_global_frame(observation.cloud_[local_id]);
+            // update state vector
+            tmp_xe(N + 2 * i) =  point.x();
+            tmp_xe(N + 2 * i + 1) = point.y();
+            // for update cov
+            const double rx = observation.cloud_[local_id].x();
+            const double ry = observation.cloud_[local_id].y();
+            Eigen::MatrixXd Gp_i(2, 3);
+            Gp_i << 1., 0., -rx * sin_theta - ry * cos_theta, 0., 1., rx * cos_theta - ry * sin_theta;
+            G_p.block(2 * i, 0, 2, 3) = Gp_i;
+            G_z.block(2 * i, 0, 2, 2) = G_zi;
+            Eigen::MatrixXd G_fx_i = Eigen::MatrixXd::Zero(2, N);
+            G_fx_i.topLeftCorner(2,3) = Gp_i;
+            G_fx.block(2 * i, 0, 2, N) = G_fx_i;
+        }
+        const auto sigma_mm = G_p * sigma_xi * G_p.transpose() + G_z * Qt_ * G_z.transpose();
+        const auto sigma_mx = G_fx * sigma_;
+        tmp_sigma.block(N , 0, 2 * N2, N) = sigma_mx;
+        tmp_sigma.block(0, N , N, 2 * N2) = sigma_mx.transpose();
+        tmp_sigma.block(N, N, 2 * N2, 2 * N2) = sigma_mm;
+
+        sigma_.resize(M_e, M_e);
+        sigma_ = tmp_sigma;
+        mu_.resize(M_e);
+        mu_ = tmp_xe;
+    }
+    std::cout << "Update now pose is: " << mu_(0) << "," << mu_(1) << "," << mu_(2) << std::endl;
+    std::cout << "state vector:  \n" << mu_ << std::endl;
+    // std::cout << "covariance is:  \n" << sigma_ << std::endl;
+    ekf_path_.header.stamp = points->header.stamp;
+    ekf_path_.header.frame_id = "world";
+    geometry_msgs::PoseStamped pose;
+    pose.header.frame_id = "world";
+    pose.header.stamp =  points->header.stamp;
+    pose.pose.position.x = mu_(0);
+    pose.pose.position.y = mu_(1);
+    const double theta = mu_(2);
+    pose.pose.orientation.x = 0.;
+    pose.pose.orientation.y = 0.;
+    pose.pose.orientation.z = std::sin(theta / 2);
+    pose.pose.orientation.w = std::cos(theta / 2);
+    ekf_path_.poses.push_back(pose);
+}
+
+void ReflectorEKFSLAM::addScan(const sensor_msgs::LaserScan::ConstPtr& scan)
 {
     const double now_time = scan->header.stamp.toSec();
     const double dt = now_time - time_;
@@ -185,7 +349,7 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     // mu_(2) = std::atan2(std::sin(mu_(2)), std::cos(mu_(2))); //norm
     time_ = now_time;
     std::cout << "  ↓↓↓-----------------------------------\n" <<
-                 "Predict now pose is: " << mu_(0) << "," << mu_(1) << "," << mu_(2) << std::endl;
+                 "Predict now 2d pose is: " << mu_(0) << "," << mu_(1) << "," << mu_(2) << std::endl;
     // std::cout << "Predict now covariance is: \n" << sigma_ << std::endl;
 
     // 完成反光板点云提取
@@ -196,7 +360,6 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
         return;
     }
 
-    //
     matched_ids result = detectMatchedIds(observation);
     const int M_ = result.map_obs_match_ids.size();
     const int M = result.state_obs_match_ids.size();
@@ -338,6 +501,98 @@ void ReflectorEKFSLAM::addLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     pose.pose.orientation.z = std::sin(theta / 2);
     pose.pose.orientation.w = std::cos(theta / 2);
     ekf_path_.poses.push_back(pose);
+}
+
+bool ReflectorEKFSLAM::getObservations(const sensor_msgs::PointCloud2& msg, Observation& obs)
+{
+    CloudPtr points_raw(new Cloud);
+    CloudPtr reflector_points_i(new Cloud);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr reflector_points(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr reflector_points_filtered(new pcl::PointCloud<pcl::PointXYZ>);
+    PointCloud centers;
+
+    auto point_transformed_to_base_link = [&](const Eigen::Vector2f& p) -> Eigen::Vector2f{
+        const float x = p.x() * std::cos(lidar_to_base_link_.z()) - p.y() * std::sin(lidar_to_base_link_.z()) + lidar_to_base_link_.x();
+        const float y = p.x() * std::sin(lidar_to_base_link_.z()) + p.y() * std::cos(lidar_to_base_link_.z()) + lidar_to_base_link_.y();
+        return Eigen::Vector2f(x,y);
+    };
+
+    pcl::fromROSMsg(msg,*points_raw);
+    for(int i = 0; i < points_raw->points.size(); i++)
+    {
+        if(points_raw->at(i).intensity > intensity_min_)
+        {
+            reflector_points_i->points.push_back(points_raw->at(i));
+        }
+    }
+
+    pcl::copyPointCloud(*reflector_points_i , *reflector_points);
+
+    // 离群点剔除
+    // 1)统计滤波法
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+    sor.setInputCloud(reflector_points);
+    sor.setMeanK(30);//临近点
+    sor.setStddevMulThresh(0.5);//距离大于1倍标准方差，值越大，丢掉的点越少
+    sor.filter(*reflector_points_filtered);
+
+    pcl::toROSMsg(*reflector_points_filtered,msg_reflector);
+    msg_reflector.header.frame_id = "world";
+
+    // 2)半径滤波法
+    // pcl::RadiusOutlierRemoval<pcl::PointXYZ> outrem;
+    // outrem.setInputCloud(reflector_points);
+    // outrem.setRadiusSearch(0.3);
+    // outrem.setMinNeighborsInRadius(4);
+    // outrem.filter(*reflector_points_filtered);
+
+    // 取反，获取被剔除的离群点
+    // sor.setNegative(true);
+    // sor.filter(*cloud_filtered);
+
+    // 通过聚类，提取出反光板点云块
+    // 创建一个Kd树对象作为提取点云时所用的方法，
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+    tree->setInputCloud (reflector_points_filtered);//创建点云索引向量，用于存储实际的点云信息
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;//欧式聚类对象
+    ec.setClusterTolerance(0.2); //设置近邻搜索的搜索半径(m)
+    ec.setMinClusterSize(4);//设置一个聚类需要的最少点数目
+    ec.setMaxClusterSize(160); //设置一个聚类需要的最大点数目
+    ec.setSearchMethod(tree);//设置点云的搜索机制
+    ec.setInputCloud(reflector_points_filtered);
+    ec.extract(cluster_indices);//从点云中提取聚类，并将 聚类后的点云块索引 保存在cluster_indices中
+
+    //迭代访问点云索引cluster_indices，直到分割出所有聚类出的反光板点云
+    for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+    {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
+        for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); pit++)
+            cloud_cluster->points.push_back(reflector_points_filtered->points[*pit]);
+
+        cloud_cluster->width = cloud_cluster->points.size ();
+        cloud_cluster->height = 1;
+        cloud_cluster->is_dense = true;
+        cloud_cluster->header = reflector_points_filtered->header;
+        cloud_cluster->sensor_orientation_ = reflector_points_filtered->sensor_orientation_;
+        cloud_cluster->sensor_origin_ = reflector_points_filtered->sensor_origin_;
+
+        std::cout << "PointCloud representing the Cluster: " << cloud_cluster->points.size () << " data points." << std::endl;
+
+        // PCL函数计算质心
+        Eigen::Vector4f centroid;// 质量m默认为1 (x,y,z,1)
+        pcl::compute3DCentroid(*cloud_cluster, centroid);	// 计算当前质心
+        Eigen::Vector2f now_point{centroid(0),centroid(1)};
+        centers.push_back(point_transformed_to_base_link(now_point));
+    }
+
+    if(centers.empty())
+        return false;
+    obs.time_ = msg.header.stamp.toSec();
+    obs.cloud_ = centers;
+    // 输出检测到的反光板个数
+    std::cout << "\n detected " << obs.cloud_.size() << " reflectors" << std::endl;
+    return true;
 }
 
 bool ReflectorEKFSLAM::getObservations(const sensor_msgs::LaserScan& msg, Observation& obs)

@@ -5,17 +5,33 @@
 
 ## demo运行方法
 
-- 默认参数启动
+1) 代码编译运行示例
 ```
+cd
+mkdir -p res_ws/src
+cd res_ws/src
+git clone git@github.com:ShihanWang/reflector_ekf_slam.git
+cd ..
+catkin_make
+source devel/setup.bash
 roslaunch reflector_ekf_slam slam.launch bag:=${HOME}/res_ws/src/reflector_ekf_slam/dataset/reflector_2d_long_2021-03-30-19-13-53.bag
 ```
-- launch命令可调参数示例
+- 技巧:在输入"bag:="之后,鼠标左键选中你的bag包然后拖动到terminal终端窗口可以自动补全bag包的路径
+
+2) launch命令可调参数示例
 ```
-roslaunch reflector_ekf_slam slam.launch bag:=${HOME}/res_ws/src/reflector_ekf_slam/dataset/reflector_2d_long_2021-03-30-19-13-53.bag start:=40 dur:=60 rate:=2 rviz:=false laser:=/scan
+roslaunch reflector_ekf_slam slam.launch bag:=${HOME}/res_ws/src/reflector_ekf_slam/dataset/reflector_2d_long_2021-03-30-19-13-53.bag start:=40 dur:=60 rate:=2 rviz:=false points:=/velodyne_points
 ```
-上述命令解释:
-将bag包从第40s开始播放,只播放60s就停止,以2倍速播放,不显示rviz,激光话题名重映射为 /scan
+- 上述命令解释:
+将bag包从第40s开始播放,只播放60s就停止播放,以2倍速播放,不显示rviz,3d激光话题名重映射为 /velodyne_points
+目前代码支持对2d激光和3d激光的反光板提取功能,分别由 scan:= 和 points:= 变量指定相应数据话题名
 上述变量不写时,将按照launch文件里的默认参数启动
+
+3) 3D数据包运行示例
+```
+roslaunch reflector_ekf_slam slam.launch bag:=${HOME}/Downloads/reflector_3d_in_corridor_2021-03-30-16-41-23.bag' scan:=/other
+```
+
 
 # 重要更新
 

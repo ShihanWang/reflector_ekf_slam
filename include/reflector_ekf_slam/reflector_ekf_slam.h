@@ -10,12 +10,29 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <geometry_msgs/Pose.h>
 #include <sensor_msgs/LaserScan.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <memory>
 #include <cstddef>
 #include <type_traits>
-
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_cloud.h>
+#include <pcl/common/transforms.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/radius_outlier_removal.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/ModelCoefficients.h>
+#include <pcl/point_types.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/kdtree/kdtree.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/segmentation/extract_clusters.h>
+#include <pcl/visualization/pcl_visualizer.h>
 // Cartographer code ...
 namespace common
 {
@@ -60,6 +77,9 @@ namespace common
 
 typedef std::vector<Eigen::Vector2f> PointCloud;
 typedef std::vector<Eigen::Matrix2d> PointCloudCoviarance;
+using PointTI = pcl::PointXYZI;
+using Cloud = pcl::PointCloud<PointTI>;
+using CloudPtr = Cloud::Ptr;
 
 class Observation
 {
@@ -94,7 +114,8 @@ class ReflectorEKFSLAM
     ReflectorEKFSLAM() = delete;
     ~ReflectorEKFSLAM();
     void addEncoder(const nav_msgs::Odometry::ConstPtr &odometry); //加入编码器数据进行运动更新
-    void addLaser(const sensor_msgs::LaserScan::ConstPtr& scan);
+    void addScan(const sensor_msgs::LaserScan::ConstPtr& scan);
+    void addPoints(const sensor_msgs::PointCloud2::ConstPtr& points);
 
     void loadFromVector(const std::vector<std::vector<double>>& vecs);
     void setSaveMapPath(const std::string& path)
@@ -112,9 +133,12 @@ class ReflectorEKFSLAM
     Eigen::MatrixXd& sigma(){
         return sigma_;}
 
+    sensor_msgs::PointCloud2 msg_reflector;
+
 private:
 
     bool getObservations(const sensor_msgs::LaserScan& msg, Observation& obs);
+    bool getObservations(const sensor_msgs::PointCloud2& msg, Observation& obs);
     void normAngle(double& angle);
     matched_ids detectMatchedIds(const Observation& obs);
     void predict(const double& dt);
@@ -123,7 +147,8 @@ private:
     const double range_max_ = 10.0;// 只取反射回的激光数据中 小于10.0米的点云
     double reflector_length_error_ = 0.06;
     double reflector_min_length_ = 0.18;
-    double intensity_min_ = 200.0;
+    // add 3D reflector points detect methods;update readme
+    double intensity_min_ = 160.0;
     // double reflector_min_length_ = 0.3;
     // double intensity_min_ = 700.0;
 
