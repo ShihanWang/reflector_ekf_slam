@@ -65,7 +65,7 @@ roslaunch reflector_ekf_slam slam.launch bag:=${HOME}/Downloads/reflector_3d_in_
 # 后续待添加的功能
 
 （1）滑窗类EKF方案：状态空间维护滑窗内多帧的位姿
-mkdir -p res_ws/src
+
 （2）ICP方案的使用：前后帧ICP，当做观测。考虑：libPointMatcher、点线csm、scan-submap匹配的方式
 
 （3）特征的使用：直角点、线段，当做观测
