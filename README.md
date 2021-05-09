@@ -55,9 +55,13 @@ roslaunch reflector_ekf_slam slam.launch bag:=${HOME}/Downloads/reflector_3d_in_
 （3）开源测试数据集
 ## 新的架构设计-2021.5.9
 （1）修复不能保存结果的代码错误
+
 （2）将反光板检测和EKF分开：反光板检测：2D激光和3D点云
+
 （3）支持不同的里程计模型：diff（差速模型）和omni（全向模型）
+
 （4）加入2D激光的畸变校正
+
 （5）360度2D激光雷达激光反光板检测：考虑0度附近反光板无法检测情况
 
 
