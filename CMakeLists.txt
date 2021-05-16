@@ -23,6 +23,7 @@ set(PACKAGE_DEPENDENCIES
 ## Find catkin macros and libraries
 find_package(catkin REQUIRED COMPONENTS ${PACKAGE_DEPENDENCIES})
 find_package(Glog REQUIRED)
+find_package(Ceres REQUIRED COMPONENTS SuiteSparse)
 
 find_package(Eigen3 REQUIRED)
 find_package(PCL 1.7 REQUIRED)
@@ -47,6 +48,7 @@ ${catkin_INCLUDE_DIRS}
 ${PROJECT_SOURCE_DIR}/include
 ${EIGEN3_INCLUDE_DIR}
 ${GLOG_INCLUDE_DIR}
+${CERES_INCLUDE_DIRS}
 )
 
 file(GLOB_RECURSE ALL_LIBRARY_HDRS "include/*.h")
@@ -59,4 +61,5 @@ target_link_libraries(slam_node
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
   glog
+  ${CERES_LIBRARIES}
 )
