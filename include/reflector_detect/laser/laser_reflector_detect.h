@@ -22,10 +22,12 @@ public:
 
   sensor::Observation HandleLaserScan(const sensor_msgs::LaserScanConstPtr &msg) override;
   void HandleOdometryData(const sensor::OdometryData &msg) override;
+  sensor::RangeData GetRangeData() override { return range_data_; }
 
 private:
   const ReflectorDetectOptions options_;
   std::unique_ptr<PoseExtrapolatorInterface> pose_extrapolator_;
+  sensor::RangeData range_data_;
 };
 
 } // namespace reflector_detect

@@ -9,6 +9,7 @@
 #include <memory>
 #include "sensor/voxel_filter.h"
 #include "mapping/submap_2d.h"
+#include "mapping/grid_2d.h"
 #include "mapping/value_conversion_tables.h"
 #include "mapping/probability_grid_range_data_inserter_2d.h"
 #include "scan_matching/ceres_scan_matcher_2d.h"
@@ -43,6 +44,7 @@ class MapBuilder
         common::Time time,
         const sensor::RangeData &range_data,
         const transform::Rigid3d &ekf_pose);
+    bool ToSubmapTexture(SubmapTexture *const response);
 
   private:
     sensor::RangeData TransformToGravityAlignedFrameAndFilter(

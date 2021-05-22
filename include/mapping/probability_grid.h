@@ -36,9 +36,9 @@ class ProbabilityGrid : public Grid2D{
   float GetProbability(const Eigen::Array2i& cell_index) const;
 
   std::unique_ptr<Grid2D> ComputeCroppedGrid() const override;
-  // bool DrawToSubmapTexture(
-  //     proto::SubmapQuery::Response::SubmapTexture* const texture,
-  //     transform::Rigid3d local_pose) const override;
+  bool DrawToSubmapTexture(
+      SubmapTexture* const texture,
+      transform::Rigid3d local_pose) const override;
 
  private:
   ValueConversionTables* conversion_tables_;

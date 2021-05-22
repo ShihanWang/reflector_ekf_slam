@@ -29,6 +29,7 @@ class Submap2D  : public Submap
     void InsertRangeData(const sensor::RangeData &range_data,
                          const ProbabilityGridRangeDataInserter2D *range_data_inserter);
     void Finish();
+    void GetMapTextureData(SubmapTexture *const response) const;    
 
   private:
     std::unique_ptr<Grid2D> grid_;

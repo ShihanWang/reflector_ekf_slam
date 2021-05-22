@@ -17,7 +17,7 @@ struct CeresScanMatcherOptions2D
     double occupied_space_weight;
     double translation_weight;
     double rotation_weight;
-    
+    ceres::Solver::Options ceres_solver_options;
 };
 
 // Align scans with an existing map using Ceres.
@@ -40,7 +40,6 @@ class CeresScanMatcher2D {
 
  private:
   const CeresScanMatcherOptions2D options_;
-  ceres::Solver::Options ceres_solver_options_;
 };
 
 }  // namespace scan_matching

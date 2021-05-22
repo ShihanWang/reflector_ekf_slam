@@ -40,4 +40,9 @@ void Submap2D::Finish() {
   set_insertion_finished(true);
 }
 
+void Submap2D::GetMapTextureData(SubmapTexture *const response) const {
+  if (!grid_) return;
+  grid()->DrawToSubmapTexture(response, local_pose());
+}
+
 }  // namespace mapping

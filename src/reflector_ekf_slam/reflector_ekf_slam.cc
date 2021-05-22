@@ -172,12 +172,12 @@ void ReflectorEKFSLAM::HandleImuMessage(const sensor::ImuData &imu)
 
 void ReflectorEKFSLAM::HandleObservationMessage(const sensor::Observation &observation)
 {
-    if (observation.cloud_.empty())
-        return;
     // Predict now pose
     const double dt = observation.time_ - state_.time;
     Predict(dt);
     state_.time = observation.time_;
+    if (observation.cloud_.empty())
+        return;
     ReflectorMatchResult result = ReflectorMatch(observation);
     const int M_ = result.map_obs_match_ids.size();
     const int M = result.state_obs_match_ids.size();

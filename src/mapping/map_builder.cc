@@ -123,4 +123,10 @@ std::unique_ptr<Grid2D> MapBuilder::CreateGrid(
       &conversion_tables_);
 }
 
+bool MapBuilder::ToSubmapTexture(SubmapTexture *const response) {
+    if(!submap_) return false;
+    submap_->GetMapTextureData(response);
+    return true;
+}
+
 } // namespace mapping

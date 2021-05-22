@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <vector>
+#include <string>
 
 #include "Eigen/Geometry"
 #include "common/math.h"
@@ -15,6 +16,7 @@
 #include "glog/logging.h"
 
 namespace mapping {
+
 
 // Converts the given probability to log odds.
 inline float Logit(float probability) {

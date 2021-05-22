@@ -25,6 +25,10 @@ find_package(catkin REQUIRED COMPONENTS ${PACKAGE_DEPENDENCIES})
 find_package(Glog REQUIRED)
 find_package(Ceres REQUIRED COMPONENTS SuiteSparse)
 
+# find_package(CAIRO REQUIRED cairo>=1.12.16)
+include(FindPkgConfig)
+PKG_SEARCH_MODULE(CAIRO REQUIRED cairo>=1.12.16)
+
 find_package(Eigen3 REQUIRED)
 find_package(PCL 1.7 REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
@@ -35,6 +39,16 @@ if (NOT GLOG_FOUND)
     message(FATAL_ERROR "Glog not found. Install Glog from the command line using the command(s) -\
       sudo apt-get install libgoogle-glog-dev libgflags-dev")
 endif (NOT GLOG_FOUND)
+
+add_service_files(
+   FILES
+   save_map.srv
+)
+
+generate_messages(
+   DEPENDENCIES
+   std_msgs
+)
 
 catkin_package(CATKIN_DEPENDS
     ${PACKAGE_DEPENDENCIES}
@@ -49,6 +63,7 @@ ${PROJECT_SOURCE_DIR}/include
 ${EIGEN3_INCLUDE_DIR}
 ${GLOG_INCLUDE_DIR}
 ${CERES_INCLUDE_DIRS}
+${CAIRO_INCLUDE_DIRS}
 )
 
 file(GLOB_RECURSE ALL_LIBRARY_HDRS "include/*.h")
@@ -62,4 +77,5 @@ target_link_libraries(slam_node
   ${PCL_LIBRARIES}
   glog
   ${CERES_LIBRARIES}
+  ${CAIRO_LIBRARIES}
 )

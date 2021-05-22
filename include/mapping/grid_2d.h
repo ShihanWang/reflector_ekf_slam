@@ -2,13 +2,26 @@
 #define MAPPING_GRID_2D_H_
 
 #include <vector>
+#include <string>
 
 #include "mapping/map_limits.h"
 #include "mapping/probability_values.h"
 #include "mapping/value_conversion_tables.h"
+#include "transform/rigid_transform.h"
+#include "transform/transform.h"
 
 namespace mapping
 {
+
+struct SubmapTexture
+{
+  std::string cells;
+  int width;
+  int height;
+  double resolution;
+  transform::Rigid3d slice_pose;
+  transform::Rigid3d global_pose;
+};
 
 class Grid2D
 {
@@ -58,9 +71,9 @@ public:
 
   virtual std::unique_ptr<Grid2D> ComputeCroppedGrid() const = 0;
 
-  // bool DrawToSubmapTexture(
-  //     proto::SubmapQuery::Response::SubmapTexture* const texture,
-  //     transform::Rigid3d local_pose) const;
+  virtual bool DrawToSubmapTexture(
+      SubmapTexture* const texture,
+      transform::Rigid3d local_pose) const = 0;
 
 protected:
   void GrowLimits(const Eigen::Vector2f &point,

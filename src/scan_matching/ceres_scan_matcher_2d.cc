@@ -20,10 +20,7 @@ CeresScanMatcher2D::CeresScanMatcher2D(
     const CeresScanMatcherOptions2D& options)
     : options_(options)
 {
-  ceres_solver_options_.use_nonmonotonic_steps = true;
-  ceres_solver_options_.max_num_iterations = 100;
-  ceres_solver_options_.num_threads = 2;
-  ceres_solver_options_.linear_solver_type = ceres::DENSE_QR;
+
 }
 
 CeresScanMatcher2D::~CeresScanMatcher2D() {}
@@ -60,7 +57,7 @@ void CeresScanMatcher2D::Match(const Eigen::Vector2d& target_translation,
           options_.rotation_weight, ceres_pose_estimate[2]),
       nullptr /* loss function */, ceres_pose_estimate);
 
-  ceres::Solve(ceres_solver_options_, &problem, summary);
+  ceres::Solve(options_.ceres_solver_options, &problem, summary);
 
   *pose_estimate = transform::Rigid2d(
       {ceres_pose_estimate[0], ceres_pose_estimate[1]}, ceres_pose_estimate[2]);

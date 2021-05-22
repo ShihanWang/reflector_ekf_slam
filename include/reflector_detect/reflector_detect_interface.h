@@ -15,6 +15,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include "transform/rigid_transform.h"
 #include "transform/transform.h"
+#include "sensor/range_data.h"
 
 namespace reflector_detect
 {
@@ -27,6 +28,7 @@ public:
   virtual void SetSensorToBaseLinkTransform(const transform::Rigid3d &pose) { sensor_to_base_link_transform_ = pose; }
   virtual sensor::Observation HandleLaserScan(const sensor_msgs::LaserScanConstPtr &msg) { return sensor::Observation(); }
   virtual sensor::Observation HandlePointCloud(const sensor_msgs::PointCloud2ConstPtr &msg) { return sensor::Observation(); }
+  virtual sensor::RangeData GetRangeData() { return {{0., 0.}, {}, {}}; }
 
   virtual void HandleOdometryData(const sensor::OdometryData &msg) {}
   virtual void HandleImuData(const sensor::ImuData &msg) {}
