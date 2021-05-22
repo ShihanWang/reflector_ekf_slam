@@ -62,9 +62,7 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
         // Get range data
         const float range = msg->ranges[i];
 
-        // 只处理距离在[range_min_,range_max_]范围用内的点云
-        // 因为当反光板距离激光较远时,激光能扫到的反光板点云数量很少,极不稳定。所以只考虑近距离内的反光板点云
-        if (options_.range_min <= range && range <= options_.range_max)
+        if(range >=  msg->range_min &&  range <= msg->range_max)
         {
             // Get now point xy value in sensor frame
             const Eigen::Vector2f now_point(range * std::cos(angle), range * std::sin(angle));
@@ -72,7 +70,12 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
             const auto postion_in_base_link = sensor_to_base_link * now_point;
             point_cloud.push_back({postion_in_base_link.x(), postion_in_base_link.y(),
                                    first_point_time + i * point_delta_t});
+        }
 
+        // 只处理距离在[range_min_,range_max_]范围用内的点云
+        // 因为当反光板距离激光较远时,激光能扫到的反光板点云数量很少,极不稳定。所以只考虑近距离内的反光板点云
+        if (options_.range_min <= range && range <= options_.range_max)
+        {
             // Detect reflector
             const double intensity = msg->intensities[i];
             // 通过强度阈值来提取来自反光板的点云
@@ -280,6 +283,35 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
     // 输出检测到的反光板个数
     // std::cout << "\n detected " << observation.cloud_.size() << " reflectors" << std::endl;
     LOG(INFO) << "Detect " << observation.cloud_.size() << " reflectors";
+
+    // Correct motion distortion by pose extrapolator
+    if(pose_extrapolator_)
+    {
+        range_data_.origin = sensor_to_base_link_transform_.translation().head<2>().cast<float>();
+        range_data_.returns.clear();
+        range_data_.misses.clear();
+        std::vector<transform::Rigid2d> poses;
+        for(const auto &p : point_cloud)
+        {
+            poses.push_back(pose_extrapolator_->ExtrapolatorPose(p.z()));            
+        }
+        CHECK(poses.size() == point_cloud.size() && point_cloud.size() > 0);
+        const auto last_pose_inverse = poses.back().inverse();
+        for(size_t i = 0; i < poses.size(); ++i)
+        {
+            range_data_.returns.push_back(
+                (last_pose_inverse * poses[i]).cast<float>() * point_cloud[i].head<2>());
+        }
+    }else
+    {
+        range_data_.origin = sensor_to_base_link_transform_.translation().head<2>().cast<float>();
+        range_data_.returns.clear();
+        range_data_.misses.clear();
+        for(auto &point : point_cloud)
+        {
+            range_data_.returns.push_back(point.head<2>());
+        }
+    }
     return observation;
 }
 

@@ -1,5 +1,6 @@
 #include "ros_node.h"
 #include "sensor/sensor_data.h"
+#include <geometry_msgs/Point32.h>
 
 Node::Node()
 {
@@ -17,6 +18,10 @@ Node::Node()
     path_publisher_ = node_handle_.advertise<nav_msgs::Path>("ekf_slam/path", 1);
     global_reflector_publisher_ =
         node_handle_.advertise<visualization_msgs::MarkerArray>("ekf_slam/global_landmark", 1);
+    occupancy_grid_publisher_ =
+        node_handle_.advertise<nav_msgs::OccupancyGrid>("ekf_slam/map", 1);
+    matched_point_cloud_publisher_ = 
+        node_handle_.advertise<sensor_msgs::PointCloud>("ekf_slam/matched_points", 1);
 
     /***** 初始化消息订阅 *****/
     odometry_subscriber_ = node_handle_.subscribe(options_.odom_topic_name, 1, &Node::OdometryCallback, this);
@@ -48,27 +53,35 @@ Node::Node()
         point_cloud_reflector_detector_->SetSensorToBaseLinkTransform(options_.sensor_to_base_link);
     }
 
+    wall_timer_ = node_handle_.createWallTimer(
+        ros::WallDuration(options_.map_publish_period_sec),
+        &Node::PublishMap, this);
+
+    save_map_service_ = 
+        node_handle_.advertiseService(
+            "reflector_ekf_slam/save_map", &Node::HandleSaveMap, this);
+
+    map_builder_ = 
+        common::make_unique<mapping::MapBuilder>(options_.map_builder_options);
+
     LOG(INFO) << "Reflector SLAM is start !!!!";
     ros::spin();
 }
 
 Node::~Node()
 {
-    if (slam_)
-        SaveResult();
+
 }
 
-void Node::SaveResult()
+void Node::SaveReflectorResult(const std::string &filebase)
 {
     if (!slam_)
         return;
     
-    std::string map_path = options_.result_path;
-    if (map_path.empty())
-        map_path = "/home/wsh/test.txt";
+    std::string map_path = filebase + ".txt";
     const ekf::State state = slam_->GetState();
     const sensor::Map map = slam_->GetGlobalMap();
-    LOG(INFO) << "Start to save result in " << map_path;
+    LOG(INFO) << "Start to save reflector map in " << map_path;
     // write data
     std::ofstream out(map_path.c_str(), std::ios::out);
     if (!map.reflector_map_.empty())
@@ -124,7 +137,7 @@ void Node::SaveResult()
     }
     out << std::endl;
     out.close();
-    LOG(INFO) << "Finish to save result";
+    LOG(INFO) << "Finish to save relfector map";
 }
 
 void Node::LoadNodeOptions()
@@ -186,6 +199,12 @@ void Node::LoadNodeOptions()
     }
     LOG(INFO) << "Use point cloud to detect reflector: " << options_.use_point_cloud;
 
+    if (!node_handle_.getParam("map_publish_period_sec", options_.map_publish_period_sec))
+    {
+        options_.map_publish_period_sec = 1.0;
+    }
+    LOG(INFO) << "Map publish period seconds: " << options_.map_publish_period_sec;
+
     double odometry_linear_coviance;
     if (node_handle_.getParam("linear_velocity_cov", odometry_linear_coviance))
     {
@@ -219,55 +238,29 @@ void Node::LoadNodeOptions()
     }
     LOG(INFO) << "Observation covariance is : " << std::sqrt(options_.observation_cov);
 
-    double intensity_min;
-    if (node_handle_.getParam("intensity_min", intensity_min))
-    {
-        options_.intensity_min = intensity_min;
-    }
-    else
+    if (!node_handle_.getParam("intensity_min", options_.intensity_min))
     {
         options_.intensity_min = 160.;
-    }
+    }   
     LOG(INFO) << "Reflector detect intensity min value is : " << options_.intensity_min;
 
-    double reflector_min_length;
-    if (node_handle_.getParam("reflector_min_length", reflector_min_length))
-    {
-        options_.reflector_min_length = reflector_min_length;
-    }
-    else
+    if (!node_handle_.getParam("reflector_min_length", options_.reflector_min_length))
     {
         options_.reflector_min_length = 0.18;
     }
     LOG(INFO) << "Reflector detect length min value is : " << options_.reflector_min_length;
 
-    double reflector_length_error;
-    if (node_handle_.getParam("reflector_length_error", reflector_length_error))
-    {
-        options_.reflector_length_error = reflector_length_error;
-    }
-    else
+    if (!node_handle_.getParam("reflector_length_error", options_.reflector_length_error))
     {
         options_.reflector_length_error = 0.06;
     }
     LOG(INFO) << "Reflector detect length error value is : " << options_.reflector_length_error;
 
-    float range_min;
-    if (node_handle_.getParam("range_min", range_min))
-    {
-        options_.range_min = range_min;
-    }
-    else
+    if (!node_handle_.getParam("range_min", options_.range_min))
     {
         options_.range_min = 0.3;
     }
-
-    float range_max;
-    if (node_handle_.getParam("range_max", range_max))
-    {
-        options_.range_max = range_max;
-    }
-    else
+    if (!node_handle_.getParam("range_max", options_.range_max))
     {
         options_.range_max = 10.;
     }
@@ -302,6 +295,138 @@ void Node::LoadNodeOptions()
         LOG(INFO) << "Use DIFF odometry model";
     }
 
+    // Load map builder options
+    if (!node_handle_.getParam("resolution", options_.map_builder_options.resolution))
+    {
+        options_.map_builder_options.resolution = 0.05;
+    }
+    LOG(INFO) << "Map resolution: " << options_.map_builder_options.resolution;
+
+    if (!node_handle_.getParam("voxel_filter_size", options_.map_builder_options.voxel_filter_size))
+    {
+        options_.map_builder_options.voxel_filter_size = 0.025;
+    }
+    LOG(INFO) << "Voxel filter size: " << options_.map_builder_options.voxel_filter_size;
+
+    sensor::AdaptiveVoxelFilterOptions adaptive_voxel_filter_options;
+    if (!node_handle_.getParam("adaptive_voxel_filter_max_length", adaptive_voxel_filter_options.max_length))
+    {
+        adaptive_voxel_filter_options.max_length = 0.9;
+    }
+    if (!node_handle_.getParam("adaptive_voxel_filter_min_num_points", adaptive_voxel_filter_options.min_num_points))
+    {
+        adaptive_voxel_filter_options.min_num_points = 500;
+    }
+    if (!node_handle_.getParam("adaptive_voxel_filter_max_range", adaptive_voxel_filter_options.max_range))
+    {
+        adaptive_voxel_filter_options.max_range = 100.;
+    }
+    options_.map_builder_options.adaptive_voxel_options = adaptive_voxel_filter_options;
+    LOG(INFO) << "Adaptive voxel filter size: { \n  max_length = " <<  adaptive_voxel_filter_options.max_length
+        << ",\n  min_num_points = " << adaptive_voxel_filter_options.min_num_points << ",\n max_range = " << 
+        adaptive_voxel_filter_options.max_range << "\n}";
+
+    scan_matching::RealTimeCorrelativeScanMatcherOptions real_time_scan_matcher_options;
+    if (!node_handle_.getParam("real_time_csm_linear_search_window", real_time_scan_matcher_options.linear_search_window))
+    {
+        real_time_scan_matcher_options.linear_search_window = 0.2;
+    }
+    if (!node_handle_.getParam("real_time_csm_angular_search_window", real_time_scan_matcher_options.angular_search_window))
+    {
+        real_time_scan_matcher_options.angular_search_window = 15.;
+    }
+    real_time_scan_matcher_options.angular_search_window *= M_PI / 180.;
+    if (!node_handle_.getParam("real_time_csm_translation_delta_cost_weight", real_time_scan_matcher_options.translation_delta_cost_weight))
+    {
+        real_time_scan_matcher_options.translation_delta_cost_weight = 1e-1;
+    }
+    if (!node_handle_.getParam("real_time_csm_rotation_delta_cost_weight", real_time_scan_matcher_options.rotation_delta_cost_weight))
+    {
+        real_time_scan_matcher_options.rotation_delta_cost_weight = 1e-1;
+    }
+    options_.map_builder_options.real_time_scan_matcher_options = real_time_scan_matcher_options;
+    LOG(INFO) << "Real time scan matcher options: { \n  linear_search_window = " <<  real_time_scan_matcher_options.linear_search_window
+        << ",\n  angular_search_window = " << real_time_scan_matcher_options.angular_search_window << ",\n translation_delta_cost_weight = " << 
+        real_time_scan_matcher_options.translation_delta_cost_weight << ",\n  rotation_delta_cost_weight = " <<
+        real_time_scan_matcher_options.rotation_delta_cost_weight<< "\n}";
+    
+    scan_matching::CeresScanMatcherOptions2D ceres_scan_matcher_options;
+    if (!node_handle_.getParam("ceres_scan_matcher_occupied_space_weight", ceres_scan_matcher_options.occupied_space_weight))
+    {
+        ceres_scan_matcher_options.occupied_space_weight = 1.;
+    }
+    if (!node_handle_.getParam("ceres_scan_matcher_translation_weight", ceres_scan_matcher_options.translation_weight))
+    {
+        ceres_scan_matcher_options.translation_weight = 0.1;
+    }
+    if (!node_handle_.getParam("ceres_scan_matcher_rotation_weight", ceres_scan_matcher_options.rotation_weight))
+    {
+        ceres_scan_matcher_options.rotation_weight = 0.4;
+    }
+
+    ceres::Solver::Options ceres_solver_options;
+    if (!node_handle_.getParam("use_nonmonotonic_steps", ceres_solver_options.use_nonmonotonic_steps))
+    {
+        ceres_solver_options.use_nonmonotonic_steps = true;
+    }
+    if (!node_handle_.getParam("max_num_iterations", ceres_solver_options.max_num_iterations))
+    {
+        ceres_solver_options.max_num_iterations = 100;
+    }
+    if (!node_handle_.getParam("num_threads", ceres_solver_options.num_threads))
+    {
+        ceres_solver_options.num_threads = 2;
+    }
+    ceres_solver_options.linear_solver_type = ceres::DENSE_QR;
+
+    ceres_scan_matcher_options.ceres_solver_options = ceres_solver_options;
+    options_.map_builder_options.ceres_scan_matcher_options = ceres_scan_matcher_options;
+    LOG(INFO) << "Ceres scan matcher options: { \n  occupied_space_weight = " <<  
+        ceres_scan_matcher_options.occupied_space_weight
+        << ",\n  translation_weight = " << ceres_scan_matcher_options.translation_weight << ",\n rotation_weight = " << 
+        ceres_scan_matcher_options.rotation_weight << "\n}";
+    LOG(INFO) << "Ceres solver options: { \n  use_nonmonotonic_steps = " << 
+        ceres_solver_options.use_nonmonotonic_steps << ",\n  max_num_iterations = " <<
+        ceres_solver_options.max_num_iterations << ",\n  num_threads = " <<
+        ceres_solver_options.num_threads << ",\n  linear_solver_type = ceres::DENSE_QR \n}";
+
+
+    mapping::ProbabilityGridRangeDataInserterOptions2D grid_data_inserter_options;
+    if (!node_handle_.getParam("grid_data_inserter_insert_free_space", grid_data_inserter_options.insert_free_space))
+    {
+        grid_data_inserter_options.insert_free_space = true;
+    }
+    if (!node_handle_.getParam("grid_data_inserter_hit_probability", grid_data_inserter_options.hit_probability))
+    {
+        grid_data_inserter_options.hit_probability = 0.55;
+    }
+    if (!node_handle_.getParam("grid_data_inserter_miss_probability", grid_data_inserter_options.miss_probability))
+    {
+        grid_data_inserter_options.miss_probability = 0.49;
+    }
+    options_.map_builder_options.range_data_inserter_options = grid_data_inserter_options;
+    LOG(INFO) << "Range data inserter options: { \n  insert_free_space = " <<  
+        grid_data_inserter_options.insert_free_space
+        << ",\n  hit_probability = " << grid_data_inserter_options.hit_probability << ",\n miss_probability = " << 
+        grid_data_inserter_options.miss_probability << "\n}";
+    
+}
+
+sensor_msgs::PointCloud Node::ToPointCloud(const sensor::RangeData &range_data)
+{
+    sensor_msgs::PointCloud cloud;
+    cloud.header.stamp = ros::Time::now();
+    cloud.header.frame_id = "world";
+    if(range_data.returns.empty()) return cloud;
+    for(const auto &point : range_data.returns)
+    {
+        geometry_msgs::Point32 p;
+        p.x = point.x();
+        p.y = point.y();
+        p.z = 0.;
+        cloud.points.push_back(p);
+    }
+    return cloud;
 }
 
 void Node::ScanCallback(const sensor_msgs::LaserScanConstPtr &scan_ptr)
@@ -329,11 +454,14 @@ void Node::ScanCallback(const sensor_msgs::LaserScanConstPtr &scan_ptr)
             exit(-1);
         }
         const auto observation = laser_reflector_detector_->HandleLaserScan(scan_ptr);
-        slam_->HandleObservationMessage(observation);
+        ekf::State state;
+        {
+            std::lock_guard<std::mutex> lock_slam(slam_mutex_);
+            slam_->HandleObservationMessage(observation);
+            state = slam_->GetState();
+        }
         if (!observation.cloud_.empty())
         {
-            const ekf::State state = slam_->GetState();
-
             /* publish  landmarks */
             visualization_msgs::MarkerArray markers = ReflectorToRosMarkers(state);
             landmark_publisher_.publish(markers);
@@ -360,6 +488,19 @@ void Node::ScanCallback(const sensor_msgs::LaserScanConstPtr &scan_ptr)
             pose.pose.orientation.w = std::cos(theta / 2);
             ekf_path_.poses.push_back(pose);
             path_publisher_.publish(ekf_path_);
+        }
+        const sensor::RangeData range_data = laser_reflector_detector_->GetRangeData();
+        const Eigen::Vector3d translation(state.mu(0), state.mu(1), 0.);
+        const Eigen::Quaterniond rotation(std::cos(state.mu(2) / 2), 0., 0., std::sin(state.mu(2) / 2));
+        transform::Rigid3d ekf_pose(translation, rotation);
+        common::Time now_time = FromRos(scan_ptr->header.stamp);
+        std::lock_guard<std::mutex> lock(map_builder_mutex_);
+        const auto match_result = map_builder_->AddRangeData(now_time, range_data, ekf_pose);
+        if(match_result)
+        {
+            LOG(INFO) << "Match pose: " << transform::Project2D(match_result->local_pose).DebugString();
+            sensor_msgs::PointCloud cloud = ToPointCloud(match_result->range_data_in_local);
+            matched_point_cloud_publisher_.publish(cloud);
         }
     }
 }
@@ -389,11 +530,15 @@ void Node::PointCloudCallback(const sensor_msgs::PointCloud2ConstPtr &points_ptr
             exit(-1);
         }
         const auto observation = point_cloud_reflector_detector_->HandlePointCloud(points_ptr);
-        slam_->HandleObservationMessage(observation);
+        ekf::State state;
+        {
+            std::lock_guard<std::mutex> lock_slam(slam_mutex_);
+            slam_->HandleObservationMessage(observation);
+            state = slam_->GetState();
+        }
+
         if (!observation.cloud_.empty())
         {
-            const ekf::State state = slam_->GetState();
-
             /* publish  landmarks */
             visualization_msgs::MarkerArray markers = ReflectorToRosMarkers(state);
             landmark_publisher_.publish(markers);
@@ -618,3 +763,182 @@ geometry_msgs::PoseWithCovarianceStamped Node::StatePosetoRosPose(const ekf::Sta
     return rpose;
 }
 
+ros::Time Node::ToRos(const common::Time time)
+{
+    int64_t uts_timestamp = common::ToUniversal(time);
+    int64_t ns_since_unix_epoch =
+        (uts_timestamp -
+            common::kUtsEpochOffsetFromUnixEpochInSeconds *
+                10000000ll) *
+        100ll;
+    ros::Time ros_time;
+    ros_time.fromNSec(ns_since_unix_epoch);
+    return ros_time;
+}
+
+common::Time Node::FromRos(const ::ros::Time &time)
+{
+    // The epoch of the ICU Universal Time Scale is "0001-01-01 00:00:00.0 +0000",
+    // exactly 719162 days before the Unix epoch.
+    return common::FromUniversal(
+        (time.sec +
+            common::kUtsEpochOffsetFromUnixEpochInSeconds) *
+            10000000ll +
+        (time.nsec + 50) / 100); // + 50 to get the rounding correct.
+}
+
+void Node::PublishMap(const ros::WallTimerEvent &timer_event)
+{
+    std::lock_guard<std::mutex> lock(map_builder_mutex_);
+    if(!map_builder_) return;
+    mapping::SubmapTexture response;
+    if(!map_builder_->ToSubmapTexture(&response))
+    {
+        // LOG(WARNING) << "Wait for map data";
+        return;
+    }
+    io::SubmapSlice submap_slice;
+    mapping::ValueConversionTables value_tables;
+    io::FillSubmapSlice(response.global_pose, response, &submap_slice, &value_tables);
+    const auto result = io::PaintSubmapSlices(submap_slice, response.resolution);
+    std::unique_ptr<nav_msgs::OccupancyGrid> msg_ptr = CreateOccupancyGridMsg(
+      result, response.resolution, "world", ros::Time::now());
+    occupancy_grid_publisher_.publish(*msg_ptr);
+}
+
+
+void Node::WritePgm(const io::Image &image, const double resolution,
+            io::FileWriter *file_writer)
+{
+    const std::string header = "P5\n# Cartographer map; " +
+                                std::to_string(resolution) + " m/pixel\n" +
+                                std::to_string(image.width()) + " " +
+                                std::to_string(image.height()) + "\n255\n";
+    file_writer->Write(header.data(), header.size());
+    for (int y = 0; y < image.height(); ++y)
+    {
+        for (int x = 0; x < image.width(); ++x)
+        {
+        const char color = image.GetPixel(x, y)[0];
+        file_writer->Write(&color, 1);
+        }
+    }
+}
+
+void Node::WriteYaml(const double resolution, const Eigen::Vector2d &origin,
+                const std::string &pgm_filename,
+                io::FileWriter *file_writer)
+{
+    // Magic constants taken directly from ros map_saver code:
+    // https://github.com/ros-planning/navigation/blob/ac41d2480c4cf1602daf39a6e9629142731d92b0/map_server/src/map_saver.cpp#L114
+    const std::string output =
+        "image: " + pgm_filename + "\n" +
+        "resolution: " + std::to_string(resolution) + "\n" + "origin: [" +
+        std::to_string(origin.x()) + ", " + std::to_string(origin.y()) +
+        ", 0.0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n";
+    file_writer->Write(output.data(), output.size());
+}
+
+std::unique_ptr<nav_msgs::OccupancyGrid> Node::CreateOccupancyGridMsg(
+      const io::PaintSubmapSlicesResult& painted_slices,
+      const double resolution, const std::string& frame_id,
+      const ros::Time& time)
+{
+  auto occupancy_grid = common::make_unique<nav_msgs::OccupancyGrid>();
+
+  const int width = cairo_image_surface_get_width(painted_slices.surface.get());
+  const int height =
+      cairo_image_surface_get_height(painted_slices.surface.get());
+
+  occupancy_grid->header.stamp = time;
+  occupancy_grid->header.frame_id = frame_id;
+  occupancy_grid->info.map_load_time = time;
+  occupancy_grid->info.resolution = resolution;
+  occupancy_grid->info.width = width;
+  occupancy_grid->info.height = height;
+  occupancy_grid->info.origin.position.x =
+      -painted_slices.origin.x() * resolution;
+  occupancy_grid->info.origin.position.y =
+      (-height + painted_slices.origin.y()) * resolution;
+  occupancy_grid->info.origin.position.z = 0.;
+  occupancy_grid->info.origin.orientation.w = 1.;
+  occupancy_grid->info.origin.orientation.x = 0.;
+  occupancy_grid->info.origin.orientation.y = 0.;
+  occupancy_grid->info.origin.orientation.z = 0.;
+
+  const uint32_t* pixel_data = reinterpret_cast<uint32_t*>(
+      cairo_image_surface_get_data(painted_slices.surface.get()));
+  occupancy_grid->data.reserve(width * height);
+  for (int y = height - 1; y >= 0; --y) {
+    for (int x = 0; x < width; ++x) {
+      const uint32_t packed = pixel_data[y * width + x];
+      const unsigned char color = packed >> 16;
+      const unsigned char observed = packed >> 8;
+      const int value =
+          observed == 0
+              ? -1
+              : common::RoundToInt((1. - color / 255.) * 100.);
+      CHECK_LE(-1, value);
+      CHECK_GE(100, value);
+      occupancy_grid->data.push_back(value);
+    }
+  }
+
+  return occupancy_grid;
+}
+
+bool Node::HandleSaveMap(
+      reflector_ekf_slam::save_map::Request &request,
+      reflector_ekf_slam::save_map::Response &response)
+{
+    if(!slam_ || !map_builder_)
+    {
+        response.flag = false;
+        response.path = "SLAM is not received any data !!!!";
+        return false;
+    }
+    std::string filebase = request.path;
+    if(filebase.empty())
+    {
+        LOG(WARNING) << "Empty path for save map: " << filebase;
+        filebase = options_.result_path;
+        LOG(WARNING) << "Result will be saved at: " << filebase;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock_slam(slam_mutex_);
+        SaveReflectorResult(filebase);
+    }
+    LOG(INFO) << "Start to write grid map";
+    std::lock_guard<std::mutex> lock(map_builder_mutex_);
+    mapping::SubmapTexture submap_response;
+    if(!map_builder_->ToSubmapTexture(&submap_response))
+    {
+        LOG(WARNING) << "Map builder do not receive any data";
+        response.flag = false;
+        response.path = "Map builder do not receive any data !!!";
+        return false;
+    }
+    io::SubmapSlice submap_slice;
+    mapping::ValueConversionTables value_tables;
+    io::FillSubmapSlice(submap_response.global_pose, submap_response, &submap_slice, &value_tables);
+    auto result = io::PaintSubmapSlices(submap_slice, submap_response.resolution);
+
+    io::StreamFileWriter pgm_writer(filebase + ".pgm");
+
+    io::Image image(std::move(result.surface));
+    WritePgm(image, submap_response.resolution, &pgm_writer);
+
+    const Eigen::Vector2d origin(
+        -result.origin.x() * submap_response.resolution,
+        (result.origin.y() - image.height()) * submap_response.resolution);
+
+    io::StreamFileWriter yaml_writer(filebase + ".yaml");
+    WriteYaml(submap_response.resolution, origin, pgm_writer.GetFilename(), &yaml_writer);
+    LOG(INFO) << "Finish to write grid map";
+
+    response.flag = true;
+    response.path = filebase;
+
+    return true;
+}

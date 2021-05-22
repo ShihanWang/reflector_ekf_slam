@@ -14,6 +14,7 @@
   <param name="use_laser" value="true"/>
   <param name="use_point_cloud" value="false"/>
   <param name="odom_model" value="diff" />
+  <param name="map_publish_period_sec" value="1.0" />
   <param name="odom" value="$(arg odom)"/>
   <param name="scan" value="$(arg scan)"/>
   <param name="points" value="$(arg points)"/>
@@ -23,11 +24,33 @@
   <param name="intensity_min" value="160."/>
   <param name="reflector_min_length" value="0.18"/>
   <param name="reflector_length_error" value="0.06"/>
-
   <param name="sensor_to_base_link" value="0.13686,0.0,0.0" type="str" />
   <param name="start_pose" value="0.0,0.0,0.0" type="str" />
+
+  <param name="resolution" value="0.05"/>
+  <param name="voxel_filter_size" value="0.025"/>
+  <param name="adaptive_voxel_filter_max_length" value="0.9"/>
+  <param name="adaptive_voxel_filter_min_num_points" value="500"/>
+  <param name="adaptive_voxel_filter_max_range" value="100."/>
+  <param name="real_time_csm_linear_search_window" value="0.2"/>
+  <param name="real_time_csm_angular_search_window" value="15"/>
+  <param name="real_time_csm_translation_delta_cost_weight" value="0.1"/>
+  <param name="real_time_csm_rotation_delta_cost_weight" value="0.1"/>
+
+  <param name="ceres_scan_matcher_occupied_space_weight" value="1."/>
+  <param name="ceres_scan_matcher_translation_weight" value="0.1"/>
+  <param name="ceres_scan_matcher_rotation_weight" value="0.4"/>
+  <param name="grid_data_inserter_insert_free_space" value="true"/>
+  <param name="grid_data_inserter_hit_probability" value="0.55"/>
+  <param name="grid_data_inserter_miss_probability" value="0.49"/>
+
+  <param name="use_nonmonotonic_steps" value="true"/>
+  <param name="max_num_iterations" value="100"/>
+  <param name="num_threads" value="2"/>
+  
+
   <param name="map_path" value="$(find reflector_ekf_slam)/test.txt" type="str"/>
-  <param name="result_path" value="$(find reflector_ekf_slam)/result.txt" type="str"/>
+  <param name="result_path" value="$(find reflector_ekf_slam)/result" type="str"/>
 
   <node name="slam_node" pkg="reflector_ekf_slam" type="slam_node"
         cwd="node" output="screen" required="true"/>
