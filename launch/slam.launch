@@ -32,7 +32,7 @@
   <param name="adaptive_voxel_filter_max_length" value="0.9"/>
   <param name="adaptive_voxel_filter_min_num_points" value="500"/>
   <param name="adaptive_voxel_filter_max_range" value="100."/>
-  <param name="real_time_csm_linear_search_window" value="0.2"/>
+  <param name="real_time_csm_linear_search_window" value="0.3"/>
   <param name="real_time_csm_angular_search_window" value="15"/>
   <param name="real_time_csm_translation_delta_cost_weight" value="0.1"/>
   <param name="real_time_csm_rotation_delta_cost_weight" value="0.1"/>
