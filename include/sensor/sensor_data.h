@@ -21,9 +21,10 @@ class Observation
 {
 public:
   Observation() {}
-  Observation(const double &time, const PointCloud &cloud) : time_(time), cloud_(cloud) {}
+  Observation(const double &time, const PointCloud &cloud) : time_(time), cloud_(cloud), gps_pose_(nullptr) {}
   double time_;
   PointCloud cloud_;
+  std::unique_ptr<transform::Rigid2d> gps_pose_;
 };
 
 class Map

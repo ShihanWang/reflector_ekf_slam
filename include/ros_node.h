@@ -27,6 +27,11 @@
 
 #include "reflector_ekf_slam/ekf_slam_interface.h"
 #include "reflector_ekf_slam/reflector_ekf_slam.h"
+
+#ifdef USE_GPS
+#include "reflector_ekf_slam/reflector_ekf_slam_gps.h"
+#endif
+
 #include "reflector_detect/reflector_detect_interface.h"
 #include "reflector_detect/laser/laser_reflector_detect.h"
 #include "reflector_detect/point_cloud/point_cloud_reflector_detect.h"

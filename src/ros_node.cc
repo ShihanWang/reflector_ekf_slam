@@ -432,7 +432,11 @@ void Node::ScanCallback(const sensor_msgs::LaserScanConstPtr &scan_ptr)
         options.linear_velocity_cov = options_.linear_velocity_cov;
         options.angular_velocity_cov = options_.angular_velocity_cov;
         options.observation_cov = options_.observation_cov;
+#ifndef USE_GPS
         slam_ = common::make_unique<ekf::ReflectorEKFSLAM>(options);
+#else
+        slam_ = common::make_unique<ekf::ReflectorEKFSLAMGPS>(options);
+#endif
         global_reflector_markers_ = ReflectorToRosMarkers(slam_->GetGlobalMap());
     }
     else
@@ -442,7 +446,68 @@ void Node::ScanCallback(const sensor_msgs::LaserScanConstPtr &scan_ptr)
             LOG(ERROR) << "Laser reflector detector should be init first";
             exit(-1);
         }
-        const auto observation = laser_reflector_detector_->HandleLaserScan(scan_ptr);
+        auto observation = laser_reflector_detector_->HandleLaserScan(scan_ptr);
+#ifdef USE_GPS
+        ekf::State state;
+        const sensor::RangeData range_data = laser_reflector_detector_->GetRangeData();
+        {
+            std::lock_guard<std::mutex> lock_slam(slam_mutex_);
+            state = slam_->PredictState(scan_ptr->header.stamp.toSec());
+        }
+        const Eigen::Vector3d translation(state.mu(0), state.mu(1), 0.);
+        const Eigen::Quaterniond rotation(std::cos(state.mu(2) / 2), 0., 0., std::sin(state.mu(2) / 2));
+        transform::Rigid3d ekf_pose(translation, rotation);
+        common::Time now_time = FromRos(scan_ptr->header.stamp);
+        std::unique_ptr<mapping::MatchingResult> match_result;
+        {
+            std::lock_guard<std::mutex> lock(map_builder_mutex_);
+            match_result = map_builder_->AddRangeData(now_time, range_data, ekf_pose);
+        }
+        if (match_result)
+        {
+            LOG(INFO) << "Match pose: " << transform::Project2D(match_result->local_pose).DebugString();
+            sensor_msgs::PointCloud cloud = ToPointCloud(match_result->range_data_in_local);
+            matched_point_cloud_publisher_.publish(cloud);
+            observation.gps_pose_ =
+                common::make_unique<transform::Rigid2d>(transform::Project2D(match_result->local_pose));
+        }
+        ekf::State latest_state;
+        {
+            std::lock_guard<std::mutex> lock_slam(slam_mutex_);
+            slam_->HandleObservationMessage(observation);
+            latest_state = slam_->GetState();
+        }
+
+        if (!observation.cloud_.empty())
+        {
+            /* publish  landmarks */
+            visualization_msgs::MarkerArray markers = ReflectorToRosMarkers(latest_state);
+            landmark_publisher_.publish(markers);
+            // publish global marker
+            global_reflector_publisher_.publish(global_reflector_markers_);
+
+            /* publish  robot pose */
+            geometry_msgs::PoseWithCovarianceStamped robot_pose = StatePosetoRosPose(latest_state);
+            robot_pose.header.stamp = scan_ptr->header.stamp;
+            pose_publisher_.publish(robot_pose);
+
+            /* publish path */
+            ekf_path_.header.stamp = scan_ptr->header.stamp;
+            ekf_path_.header.frame_id = "world";
+            geometry_msgs::PoseStamped pose;
+            pose.header.frame_id = "world";
+            pose.header.stamp = scan_ptr->header.stamp;
+            pose.pose.position.x = latest_state.mu(0);
+            pose.pose.position.y = latest_state.mu(1);
+            const double theta = latest_state.mu(2);
+            pose.pose.orientation.x = 0.;
+            pose.pose.orientation.y = 0.;
+            pose.pose.orientation.z = std::sin(theta / 2);
+            pose.pose.orientation.w = std::cos(theta / 2);
+            ekf_path_.poses.push_back(pose);
+            path_publisher_.publish(ekf_path_);
+        }
+#else
         ekf::State state;
         {
             std::lock_guard<std::mutex> lock_slam(slam_mutex_);
@@ -491,6 +556,7 @@ void Node::ScanCallback(const sensor_msgs::LaserScanConstPtr &scan_ptr)
             sensor_msgs::PointCloud cloud = ToPointCloud(match_result->range_data_in_local);
             matched_point_cloud_publisher_.publish(cloud);
         }
+#endif
     }
 }
 

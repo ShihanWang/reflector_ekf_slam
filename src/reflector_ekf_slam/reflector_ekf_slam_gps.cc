@@ -1,9 +1,9 @@
-#include <reflector_ekf_slam/reflector_ekf_slam.h>
+#include <reflector_ekf_slam/reflector_ekf_slam_gps.h>
 #include <glog/logging.h>
 
 namespace ekf
 {
-ReflectorEKFSLAM::ReflectorEKFSLAM(const EKFOptions &options) : options_(options), vt_(Eigen::Vector3d::Zero())
+ReflectorEKFSLAMGPS::ReflectorEKFSLAMGPS(const EKFOptions &options) : options_(options), vt_(Eigen::Vector3d::Zero())
 {
     state_.time = options_.init_time;
     state_.mu = options_.init_pose;
@@ -36,11 +36,11 @@ ReflectorEKFSLAM::ReflectorEKFSLAM(const EKFOptions &options) : options_(options
     LoadMapFromTxtFile(options_.map_path);
 }
 
-ReflectorEKFSLAM::~ReflectorEKFSLAM()
+ReflectorEKFSLAMGPS::~ReflectorEKFSLAMGPS()
 {
 }
 
-void ReflectorEKFSLAM::LoadMapFromTxtFile(const std::string &file)
+void ReflectorEKFSLAMGPS::LoadMapFromTxtFile(const std::string &file)
 {
     if (file.empty() || !IsFileExist(file))
         return;
@@ -94,7 +94,7 @@ void ReflectorEKFSLAM::LoadMapFromTxtFile(const std::string &file)
     map_.reflector_map_coviarance_ = reflector_map_coviarance;
 }
 
-State ReflectorEKFSLAM::PredictState(const double &time)
+State ReflectorEKFSLAMGPS::PredictState(const double &time)
 {
     State result = state_;
     const double dt = time - state_.time;
@@ -151,7 +151,7 @@ State ReflectorEKFSLAM::PredictState(const double &time)
     return result;
 }
 
-void ReflectorEKFSLAM::Predict(const double &dt)
+void ReflectorEKFSLAMGPS::Predict(const double &dt)
 {
     if (options_.odom_model == sensor::OdometryModel::DIFF)
     {
@@ -205,7 +205,7 @@ void ReflectorEKFSLAM::Predict(const double &dt)
     state_.mu(2) = std::atan2(std::sin(state_.mu(2)), std::cos(state_.mu(2))); //norm
 }
 
-void ReflectorEKFSLAM::HandleOdometryMessage(const sensor::OdometryData &odometry)
+void ReflectorEKFSLAMGPS::HandleOdometryMessage(const sensor::OdometryData &odometry)
 {
     // drop old data
     if (odometry.time < state_.time)
@@ -221,12 +221,12 @@ void ReflectorEKFSLAM::HandleOdometryMessage(const sensor::OdometryData &odometr
     }
     // use imu
 }
-void ReflectorEKFSLAM::HandleImuMessage(const sensor::ImuData &imu)
+void ReflectorEKFSLAMGPS::HandleImuMessage(const sensor::ImuData &imu)
 {
     // use imu
 }
 
-void ReflectorEKFSLAM::HandleObservationMessage(const sensor::Observation &observation)
+void ReflectorEKFSLAMGPS::HandleObservationMessage(const sensor::Observation &observation)
 {
     // Predict now pose
     const double dt = observation.time_ - state_.time;
@@ -367,7 +367,7 @@ void ReflectorEKFSLAM::HandleObservationMessage(const sensor::Observation &obser
               << state_.mu;
 }
 
-ReflectorMatchResult ReflectorEKFSLAM::ReflectorMatch(const sensor::Observation &obs)
+ReflectorMatchResult ReflectorEKFSLAMGPS::ReflectorMatch(const sensor::Observation &obs)
 {
     ReflectorMatchResult ids;
     if (obs.cloud_.empty())

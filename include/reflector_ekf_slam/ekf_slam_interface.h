@@ -57,6 +57,8 @@ public:
   virtual void HandleImuMessage(const sensor::ImuData &imu) = 0;
   virtual void HandleObservationMessage(const sensor::Observation &observation) = 0;
 
+  virtual State PredictState(const double &time) = 0;
+
   virtual Eigen::VectorXd &GetStateVector() = 0;
   virtual Eigen::MatrixXd &GetCoviarance() = 0;
   virtual double GetLatestTime() = 0;

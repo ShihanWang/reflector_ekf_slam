@@ -7,6 +7,15 @@ SET(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
+option(GPS OFF)
+
+if(GPS)
+  message("You are using an unfinished EKF module !!!!!!!!!!!!")
+  add_definitions(-DUSE_GPS)
+else()
+  message("You are using a stable EKF module !!!!!!!!!!!!")
+endif()
+
 set(PACKAGE_DEPENDENCIES
   visualization_msgs
   nav_msgs
@@ -18,7 +27,6 @@ set(PACKAGE_DEPENDENCIES
   pcl_ros
   pcl_conversions
 )
-
 
 ## Find catkin macros and libraries
 find_package(catkin REQUIRED COMPONENTS ${PACKAGE_DEPENDENCIES})

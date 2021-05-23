@@ -1,5 +1,5 @@
-#ifndef REFLECTOR_EKF_SLAM_REFLECTOR_EKF_SLAM_H
-#define REFLECTOR_EKF_SLAM_REFLECTOR_EKF_SLAM_H
+#ifndef REFLECTOR_EKF_SLAM_REFLECTOR_EKF_SLAM_GPS_H
+#define REFLECTOR_EKF_SLAM_REFLECTOR_EKF_SLAM_GPS_H
 
 #include <iostream>
 #include <vector>
@@ -10,12 +10,12 @@
 
 namespace ekf
 {
-class ReflectorEKFSLAM : public ReflectorEKFSLAMInterface
+class ReflectorEKFSLAMGPS : public ReflectorEKFSLAMInterface
 {
 public:
-  ReflectorEKFSLAM(const EKFOptions &options);
-  ReflectorEKFSLAM() = delete;
-  ~ReflectorEKFSLAM() override;
+  ReflectorEKFSLAMGPS(const EKFOptions &options);
+  ReflectorEKFSLAMGPS() = delete;
+  ~ReflectorEKFSLAMGPS() override;
 
   void HandleOdometryMessage(const sensor::OdometryData &odometry) override;
   void HandleImuMessage(const sensor::ImuData &imu) override;
@@ -63,4 +63,4 @@ private:
   sensor::Map map_;
 };
 } // namespace ekf
-#endif // REFLECTOR_EKF_SLAM_REFLECTOR_EKF_SLAM_H
+#endif // REFLECTOR_EKF_SLAM_REFLECTOR_EKF_SLAM_GPS_H
