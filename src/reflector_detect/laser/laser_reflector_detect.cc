@@ -235,12 +235,44 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
         }
     }
 
+     // Correct motion distortion by pose extrapolator
+    double max_time_stamp = point_cloud.back().z();
+    transform::Rigid2d max_time_pose;
+    if(pose_extrapolator_)
+    {
+        range_data_.origin = sensor_to_base_link_transform_.translation().head<2>().cast<float>();
+        range_data_.returns.clear();
+        range_data_.misses.clear();
+        std::vector<transform::Rigid2d> poses;
+        for(const auto &p : point_cloud)
+        {
+            poses.push_back(pose_extrapolator_->ExtrapolatorPose(p.z()));            
+        }
+        CHECK(poses.size() == point_cloud.size() && point_cloud.size() > 0);
+        max_time_pose = poses.back();
+        const auto last_pose_inverse = poses.back().inverse();
+        for(size_t i = 0; i < poses.size(); ++i)
+        {
+            range_data_.returns.push_back(
+                (last_pose_inverse * poses[i]).cast<float>() * point_cloud[i].head<2>());
+        }
+    }else
+    {
+        range_data_.origin = sensor_to_base_link_transform_.translation().head<2>().cast<float>();
+        range_data_.returns.clear();
+        range_data_.misses.clear();
+        max_time_pose = transform::Rigid2d();
+        for(auto &point : point_cloud)
+        {
+            range_data_.returns.push_back(point.head<2>());
+        }
+    }
+
     if (reflector_points.empty())
     {
         return observation;
     }
-    double max_time_stamp = -1.;
-    transform::Rigid2d max_time_pose;
+    
     std::vector<sensor::PointCloud> all_points_in_odom;
     for (auto &points : reflector_points)
     {
@@ -256,11 +288,6 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
             else
             {
                 pose = transform::Rigid2d();
-            }
-            if (point_time > max_time_stamp)
-            {
-                max_time_stamp = point_time;
-                max_time_pose = pose;
             }
             pts_in_odom.push_back(pose.cast<float>() * p.head<2>());
         }
@@ -284,34 +311,7 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
     // std::cout << "\n detected " << observation.cloud_.size() << " reflectors" << std::endl;
     LOG(INFO) << "Detect " << observation.cloud_.size() << " reflectors";
 
-    // Correct motion distortion by pose extrapolator
-    if(pose_extrapolator_)
-    {
-        range_data_.origin = sensor_to_base_link_transform_.translation().head<2>().cast<float>();
-        range_data_.returns.clear();
-        range_data_.misses.clear();
-        std::vector<transform::Rigid2d> poses;
-        for(const auto &p : point_cloud)
-        {
-            poses.push_back(pose_extrapolator_->ExtrapolatorPose(p.z()));            
-        }
-        CHECK(poses.size() == point_cloud.size() && point_cloud.size() > 0);
-        const auto last_pose_inverse = poses.back().inverse();
-        for(size_t i = 0; i < poses.size(); ++i)
-        {
-            range_data_.returns.push_back(
-                (last_pose_inverse * poses[i]).cast<float>() * point_cloud[i].head<2>());
-        }
-    }else
-    {
-        range_data_.origin = sensor_to_base_link_transform_.translation().head<2>().cast<float>();
-        range_data_.returns.clear();
-        range_data_.misses.clear();
-        for(auto &point : point_cloud)
-        {
-            range_data_.returns.push_back(point.head<2>());
-        }
-    }
+   
     return observation;
 }
 
