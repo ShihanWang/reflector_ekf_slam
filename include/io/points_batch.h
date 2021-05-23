@@ -11,12 +11,15 @@
 #include "common/time.h"
 #include "io/color.h"
 
-namespace io {
+namespace io
+{
 
 // A number of points, captured around the same 'time' and by a
 // sensor at the same 'origin'.
-struct PointsBatch {
-  PointsBatch() {
+struct PointsBatch
+{
+  PointsBatch()
+  {
     origin = Eigen::Vector3f::Zero();
     trajectory_id = 0;
   }
@@ -50,8 +53,8 @@ struct PointsBatch {
 };
 
 // Removes the indices in 'to_remove' from 'batch'.
-void RemovePoints(std::unordered_set<int> to_remove, PointsBatch* batch);
+void RemovePoints(std::unordered_set<int> to_remove, PointsBatch *batch);
 
-}  // namespace io
+} // namespace io
 
-#endif  // IO_POINTS_BATCH_H_
+#endif // IO_POINTS_BATCH_H_

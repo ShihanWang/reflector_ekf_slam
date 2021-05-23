@@ -4,17 +4,20 @@
 
 #include "common/math.h"
 
-namespace scan_matching {
+namespace scan_matching
+{
 
 SearchParameters::SearchParameters(const double linear_search_window,
                                    const double angular_search_window,
-                                   const sensor::PointCloud& point_cloud,
+                                   const sensor::PointCloud &point_cloud,
                                    const double resolution)
-    : resolution(resolution) {
+    : resolution(resolution)
+{
   // We set this value to something on the order of resolution to make sure that
   // the std::acos() below is defined.
   float max_scan_range = 3.f * resolution;
-  for (const auto& point : point_cloud) {
+  for (const auto &point : point_cloud)
+  {
     const float range = point.norm();
     max_scan_range = std::max(range, max_scan_range);
   }
@@ -29,7 +32,8 @@ SearchParameters::SearchParameters(const double linear_search_window,
   const int num_linear_perturbations =
       std::ceil(linear_search_window / resolution);
   linear_bounds.reserve(num_scans);
-  for (int i = 0; i != num_scans; ++i) {
+  for (int i = 0; i != num_scans; ++i)
+  {
     linear_bounds.push_back(
         LinearBounds{-num_linear_perturbations, num_linear_perturbations,
                      -num_linear_perturbations, num_linear_perturbations});
@@ -43,23 +47,28 @@ SearchParameters::SearchParameters(const int num_linear_perturbations,
     : num_angular_perturbations(num_angular_perturbations),
       angular_perturbation_step_size(angular_perturbation_step_size),
       resolution(resolution),
-      num_scans(2 * num_angular_perturbations + 1) {
+      num_scans(2 * num_angular_perturbations + 1)
+{
   linear_bounds.reserve(num_scans);
-  for (int i = 0; i != num_scans; ++i) {
+  for (int i = 0; i != num_scans; ++i)
+  {
     linear_bounds.push_back(
         LinearBounds{-num_linear_perturbations, num_linear_perturbations,
                      -num_linear_perturbations, num_linear_perturbations});
   }
 }
 
-void SearchParameters::ShrinkToFit(const std::vector<DiscreteScan2D>& scans,
-                                   const mapping::CellLimits& cell_limits) {
+void SearchParameters::ShrinkToFit(const std::vector<DiscreteScan2D> &scans,
+                                   const mapping::CellLimits &cell_limits)
+{
   CHECK_EQ(scans.size(), num_scans);
   CHECK_EQ(linear_bounds.size(), num_scans);
-  for (int i = 0; i != num_scans; ++i) {
+  for (int i = 0; i != num_scans; ++i)
+  {
     Eigen::Array2i min_bound = Eigen::Array2i::Zero();
     Eigen::Array2i max_bound = Eigen::Array2i::Zero();
-    for (const Eigen::Array2i& xy_index : scans[i]) {
+    for (const Eigen::Array2i &xy_index : scans[i])
+    {
       min_bound = min_bound.min(-xy_index);
       max_bound = max_bound.max(Eigen::Array2i(cell_limits.num_x_cells - 1,
                                                cell_limits.num_y_cells - 1) -
@@ -73,8 +82,9 @@ void SearchParameters::ShrinkToFit(const std::vector<DiscreteScan2D>& scans,
 }
 
 std::vector<sensor::PointCloud> GenerateRotatedScans(
-    const sensor::PointCloud& point_cloud,
-    const SearchParameters& search_parameters) {
+    const sensor::PointCloud &point_cloud,
+    const SearchParameters &search_parameters)
+{
   std::vector<sensor::PointCloud> rotated_scans;
   rotated_scans.reserve(search_parameters.num_scans);
 
@@ -82,7 +92,8 @@ std::vector<sensor::PointCloud> GenerateRotatedScans(
                        search_parameters.angular_perturbation_step_size;
   for (int scan_index = 0; scan_index < search_parameters.num_scans;
        ++scan_index,
-           delta_theta += search_parameters.angular_perturbation_step_size) {
+           delta_theta += search_parameters.angular_perturbation_step_size)
+  {
     rotated_scans.push_back(sensor::TransformPointCloud(
         point_cloud, transform::Project2D(transform::Rigid3f::Rotation(Eigen::AngleAxisf(
                          delta_theta, Eigen::Vector3f::UnitZ())))));
@@ -91,14 +102,17 @@ std::vector<sensor::PointCloud> GenerateRotatedScans(
 }
 
 std::vector<DiscreteScan2D> DiscretizeScans(
-    const mapping::MapLimits& map_limits, const std::vector<sensor::PointCloud>& scans,
-    const Eigen::Translation2f& initial_translation) {
+    const mapping::MapLimits &map_limits, const std::vector<sensor::PointCloud> &scans,
+    const Eigen::Translation2f &initial_translation)
+{
   std::vector<DiscreteScan2D> discrete_scans;
   discrete_scans.reserve(scans.size());
-  for (const sensor::PointCloud& scan : scans) {
+  for (const sensor::PointCloud &scan : scans)
+  {
     discrete_scans.emplace_back();
     discrete_scans.back().reserve(scan.size());
-    for (const auto& point : scan) {
+    for (const auto &point : scan)
+    {
       const Eigen::Vector2f translated_point =
           Eigen::Affine2f(initial_translation) * point;
       discrete_scans.back().push_back(
@@ -108,4 +122,4 @@ std::vector<DiscreteScan2D> DiscretizeScans(
   return discrete_scans;
 }
 
-}  // namespace scan_matching
+} // namespace scan_matching

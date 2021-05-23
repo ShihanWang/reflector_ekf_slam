@@ -16,24 +16,24 @@
 namespace mapping
 {
 
-class Submap2D  : public Submap
+class Submap2D : public Submap
 {
-  public:
-    Submap2D(const Eigen::Vector2f &origin, std::unique_ptr<Grid2D> grid,
-             ValueConversionTables *conversion_tables);
+public:
+  Submap2D(const Eigen::Vector2f &origin, std::unique_ptr<Grid2D> grid,
+           ValueConversionTables *conversion_tables);
 
-    const Grid2D *grid() const { return grid_.get(); }
+  const Grid2D *grid() const { return grid_.get(); }
 
-    // Insert 'range_data' into this submap using 'range_data_inserter'. The
-    // submap must not be finished yet.
-    void InsertRangeData(const sensor::RangeData &range_data,
-                         const ProbabilityGridRangeDataInserter2D *range_data_inserter);
-    void Finish();
-    void GetMapTextureData(SubmapTexture *const response) const;    
+  // Insert 'range_data' into this submap using 'range_data_inserter'. The
+  // submap must not be finished yet.
+  void InsertRangeData(const sensor::RangeData &range_data,
+                       const ProbabilityGridRangeDataInserter2D *range_data_inserter);
+  void Finish();
+  void GetMapTextureData(SubmapTexture *const response) const;
 
-  private:
-    std::unique_ptr<Grid2D> grid_;
-    ValueConversionTables *conversion_tables_;
+private:
+  std::unique_ptr<Grid2D> grid_;
+  ValueConversionTables *conversion_tables_;
 };
 
 } // namespace mapping

@@ -9,9 +9,11 @@
 #include "mapping/submap_2d.h"
 #include "mapping/submaps.h"
 
-namespace io {
+namespace io
+{
 
-struct PaintSubmapSlicesResult {
+struct PaintSubmapSlicesResult
+{
   PaintSubmapSlicesResult(io::UniqueCairoSurfacePtr surface,
                           Eigen::Array2f origin)
       : surface(std::move(surface)), origin(origin) {}
@@ -21,7 +23,8 @@ struct PaintSubmapSlicesResult {
   Eigen::Array2f origin;
 };
 
-struct SubmapSlice {
+struct SubmapSlice
+{
   SubmapSlice()
       : surface(io::MakeUniqueCairoSurfacePtr(nullptr)) {}
 
@@ -40,8 +43,10 @@ struct SubmapSlice {
   int metadata_version = -1;
 };
 
-struct SubmapTexture {
-  struct Pixels {
+struct SubmapTexture
+{
+  struct Pixels
+  {
     std::vector<char> intensity;
     std::vector<char> alpha;
   };
@@ -52,33 +57,33 @@ struct SubmapTexture {
   transform::Rigid3d slice_pose;
 };
 
-struct SubmapTextures {
+struct SubmapTextures
+{
   int version;
   std::vector<SubmapTexture> textures;
 };
 
 PaintSubmapSlicesResult PaintSubmapSlices(
-    const SubmapSlice& submaps,
+    const SubmapSlice &submaps,
     double resolution);
 
-
 void FillSubmapSlice(
-    const transform::Rigid3d& global_submap_pose,
+    const transform::Rigid3d &global_submap_pose,
     const mapping::SubmapTexture &submap_texture,
-    SubmapSlice* const submap_slice,
-    mapping::ValueConversionTables* conversion_tables);
+    SubmapSlice *const submap_slice,
+    mapping::ValueConversionTables *conversion_tables);
 
 // Unpacks cell data as provided by the backend into 'intensity' and 'alpha'.
-SubmapTexture::Pixels UnpackTextureData(const std::string& compressed_cells,
+SubmapTexture::Pixels UnpackTextureData(const std::string &compressed_cells,
                                         int width, int height);
 
 // Draw a texture into a cairo surface. 'cairo_data' will store the pixel data
 // for the surface and must therefore outlive the use of the surface.
-UniqueCairoSurfacePtr DrawTexture(const std::vector<char>& intensity,
-                                  const std::vector<char>& alpha, int width,
+UniqueCairoSurfacePtr DrawTexture(const std::vector<char> &intensity,
+                                  const std::vector<char> &alpha, int width,
                                   int height,
-                                  std::vector<uint32_t>* cairo_data);
+                                  std::vector<uint32_t> *cairo_data);
 
-}  // namespace io
+} // namespace io
 
-#endif  // IO_SUBMAP_PAINTER_H_
+#endif // IO_SUBMAP_PAINTER_H_

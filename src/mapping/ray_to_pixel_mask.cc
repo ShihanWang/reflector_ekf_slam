@@ -5,24 +5,29 @@
 
 #include "glog/logging.h"
 
-namespace mapping {
-namespace {
+namespace mapping
+{
+namespace
+{
 
-bool isEqual(const Eigen::Array2i& lhs, const Eigen::Array2i& rhs) {
+bool isEqual(const Eigen::Array2i &lhs, const Eigen::Array2i &rhs)
+{
   return ((lhs - rhs).matrix().lpNorm<1>() == 0);
 }
-}  // namespace
+} // namespace
 
 // Compute all pixels that contain some part of the line segment connecting
 // 'scaled_begin' and 'scaled_end'. 'scaled_begin' and 'scaled_end' are scaled
 // by 'subpixel_scale'. 'scaled_begin' and 'scaled_end' are expected to be
 // greater than zero. Return values are in pixels and not scaled.
-std::vector<Eigen::Array2i> RayToPixelMask(const Eigen::Array2i& scaled_begin,
-                                           const Eigen::Array2i& scaled_end,
-                                           int subpixel_scale) {
+std::vector<Eigen::Array2i> RayToPixelMask(const Eigen::Array2i &scaled_begin,
+                                           const Eigen::Array2i &scaled_end,
+                                           int subpixel_scale)
+{
   // For simplicity, we order 'scaled_begin' and 'scaled_end' by their x
   // coordinate.
-  if (scaled_begin.x() > scaled_end.x()) {
+  if (scaled_begin.x() > scaled_end.x())
+  {
     return RayToPixelMask(scaled_end, scaled_begin, subpixel_scale);
   }
 
@@ -32,15 +37,18 @@ std::vector<Eigen::Array2i> RayToPixelMask(const Eigen::Array2i& scaled_begin,
   std::vector<Eigen::Array2i> pixel_mask;
   // Special case: We have to draw a vertical line in full pixels, as
   // 'scaled_begin' and 'scaled_end' have the same full pixel x coordinate.
-  if (scaled_begin.x() / subpixel_scale == scaled_end.x() / subpixel_scale) {
+  if (scaled_begin.x() / subpixel_scale == scaled_end.x() / subpixel_scale)
+  {
     Eigen::Array2i current(
         scaled_begin.x() / subpixel_scale,
         std::min(scaled_begin.y(), scaled_end.y()) / subpixel_scale);
     pixel_mask.push_back(current);
     const int end_y =
         std::max(scaled_begin.y(), scaled_end.y()) / subpixel_scale;
-    for (; current.y() <= end_y; ++current.y()) {
-      if (!isEqual(pixel_mask.back(), current)) pixel_mask.push_back(current);
+    for (; current.y() <= end_y; ++current.y())
+    {
+      if (!isEqual(pixel_mask.back(), current))
+        pixel_mask.push_back(current);
     }
     return pixel_mask;
   }
@@ -79,20 +87,27 @@ std::vector<Eigen::Array2i> RayToPixelMask(const Eigen::Array2i& scaled_begin,
 
   // Move from 'scaled_begin' to the next pixel border to the right.
   sub_y += dy * first_pixel;
-  if (dy > 0) {
-    while (true) {
-      if (!isEqual(pixel_mask.back(), current)) pixel_mask.push_back(current);
-      while (sub_y > denominator) {
+  if (dy > 0)
+  {
+    while (true)
+    {
+      if (!isEqual(pixel_mask.back(), current))
+        pixel_mask.push_back(current);
+      while (sub_y > denominator)
+      {
         sub_y -= denominator;
         ++current.y();
-        if (!isEqual(pixel_mask.back(), current)) pixel_mask.push_back(current);
+        if (!isEqual(pixel_mask.back(), current))
+          pixel_mask.push_back(current);
       }
       ++current.x();
-      if (sub_y == denominator) {
+      if (sub_y == denominator)
+      {
         sub_y -= denominator;
         ++current.y();
       }
-      if (current.x() == end_x) {
+      if (current.x() == end_x)
+      {
         break;
       }
       // Move from one pixel border to the next.
@@ -100,11 +115,14 @@ std::vector<Eigen::Array2i> RayToPixelMask(const Eigen::Array2i& scaled_begin,
     }
     // Move from the pixel border on the right to 'scaled_end'.
     sub_y += dy * last_pixel;
-    if (!isEqual(pixel_mask.back(), current)) pixel_mask.push_back(current);
-    while (sub_y > denominator) {
+    if (!isEqual(pixel_mask.back(), current))
+      pixel_mask.push_back(current);
+    while (sub_y > denominator)
+    {
       sub_y -= denominator;
       ++current.y();
-      if (!isEqual(pixel_mask.back(), current)) pixel_mask.push_back(current);
+      if (!isEqual(pixel_mask.back(), current))
+        pixel_mask.push_back(current);
     }
     CHECK_NE(sub_y, denominator);
     CHECK_EQ(current.y(), scaled_end.y() / subpixel_scale);
@@ -112,33 +130,42 @@ std::vector<Eigen::Array2i> RayToPixelMask(const Eigen::Array2i& scaled_begin,
   }
 
   // Same for lines non-ascending in y coordinates.
-  while (true) {
-    if (!isEqual(pixel_mask.back(), current)) pixel_mask.push_back(current);
-    while (sub_y < 0) {
+  while (true)
+  {
+    if (!isEqual(pixel_mask.back(), current))
+      pixel_mask.push_back(current);
+    while (sub_y < 0)
+    {
       sub_y += denominator;
       --current.y();
-      if (!isEqual(pixel_mask.back(), current)) pixel_mask.push_back(current);
+      if (!isEqual(pixel_mask.back(), current))
+        pixel_mask.push_back(current);
     }
     ++current.x();
-    if (sub_y == 0) {
+    if (sub_y == 0)
+    {
       sub_y += denominator;
       --current.y();
     }
-    if (current.x() == end_x) {
+    if (current.x() == end_x)
+    {
       break;
     }
     sub_y += dy * 2 * subpixel_scale;
   }
   sub_y += dy * last_pixel;
-  if (!isEqual(pixel_mask.back(), current)) pixel_mask.push_back(current);
-  while (sub_y < 0) {
+  if (!isEqual(pixel_mask.back(), current))
+    pixel_mask.push_back(current);
+  while (sub_y < 0)
+  {
     sub_y += denominator;
     --current.y();
-    if (!isEqual(pixel_mask.back(), current)) pixel_mask.push_back(current);
+    if (!isEqual(pixel_mask.back(), current))
+      pixel_mask.push_back(current);
   }
   CHECK_NE(sub_y, 0);
   CHECK_EQ(current.y(), scaled_end.y() / subpixel_scale);
   return pixel_mask;
 }
 
-}  // namespace mapping
+} // namespace mapping

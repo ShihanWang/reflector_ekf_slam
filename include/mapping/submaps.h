@@ -15,11 +15,12 @@
 
 #include "glog/logging.h"
 
-namespace mapping {
-
+namespace mapping
+{
 
 // Converts the given probability to log odds.
-inline float Logit(float probability) {
+inline float Logit(float probability)
+{
   return std::log(probability / (1.f - probability));
 }
 
@@ -28,7 +29,8 @@ const float kMinLogOdds = Logit(kMinProbability);
 
 // Converts a probability to a log odds integer. 0 means unknown, [kMinLogOdds,
 // kMaxLogOdds] is mapped to [1, 255].
-inline uint8 ProbabilityToLogOddsInteger(const float probability) {
+inline uint8 ProbabilityToLogOddsInteger(const float probability)
+{
   const int value = common::RoundToInt((Logit(probability) - kMinLogOdds) *
                                        254.f / (kMaxLogOdds - kMinLogOdds)) +
                     1;
@@ -41,9 +43,10 @@ inline uint8 ProbabilityToLogOddsInteger(const float probability) {
 // track of how many range data were inserted into it, and sets
 // 'insertion_finished' when the map no longer changes and is ready for loop
 // closing.
-class Submap {
- public:
-  Submap(const transform::Rigid3d& local_submap_pose)
+class Submap
+{
+public:
+  Submap(const transform::Rigid3d &local_submap_pose)
       : local_pose_(local_submap_pose) {}
   virtual ~Submap() {}
 
@@ -52,21 +55,23 @@ class Submap {
 
   // Number of RangeData inserted.
   int num_range_data() const { return num_range_data_; }
-  void set_num_range_data(const int num_range_data) {
+  void set_num_range_data(const int num_range_data)
+  {
     num_range_data_ = num_range_data;
   }
 
   bool insertion_finished() const { return insertion_finished_; }
-  void set_insertion_finished(bool insertion_finished) {
+  void set_insertion_finished(bool insertion_finished)
+  {
     insertion_finished_ = insertion_finished;
   }
 
- private:
+private:
   const transform::Rigid3d local_pose_;
   int num_range_data_ = 0;
   bool insertion_finished_ = false;
 };
 
-}  // namespace mapping
+} // namespace mapping
 
-#endif  // CARTOGRAPHER_MAPPING_SUBMAPS_H_
+#endif // CARTOGRAPHER_MAPPING_SUBMAPS_H_

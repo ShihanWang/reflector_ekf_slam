@@ -62,7 +62,7 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
         // Get range data
         const float range = msg->ranges[i];
 
-        if(range >=  msg->range_min &&  range <= msg->range_max)
+        if (range >= msg->range_min && range <= msg->range_max)
         {
             // Get now point xy value in sensor frame
             const Eigen::Vector2f now_point(range * std::cos(angle), range * std::sin(angle));
@@ -235,34 +235,35 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
         }
     }
 
-     // Correct motion distortion by pose extrapolator
+    // Correct motion distortion by pose extrapolator
     double max_time_stamp = point_cloud.back().z();
     transform::Rigid2d max_time_pose;
-    if(pose_extrapolator_)
+    if (pose_extrapolator_)
     {
         range_data_.origin = sensor_to_base_link_transform_.translation().head<2>().cast<float>();
         range_data_.returns.clear();
         range_data_.misses.clear();
         std::vector<transform::Rigid2d> poses;
-        for(const auto &p : point_cloud)
+        for (const auto &p : point_cloud)
         {
-            poses.push_back(pose_extrapolator_->ExtrapolatorPose(p.z()));            
+            poses.push_back(pose_extrapolator_->ExtrapolatorPose(p.z()));
         }
         CHECK(poses.size() == point_cloud.size() && point_cloud.size() > 0);
         max_time_pose = poses.back();
         const auto last_pose_inverse = poses.back().inverse();
-        for(size_t i = 0; i < poses.size(); ++i)
+        for (size_t i = 0; i < poses.size(); ++i)
         {
             range_data_.returns.push_back(
                 (last_pose_inverse * poses[i]).cast<float>() * point_cloud[i].head<2>());
         }
-    }else
+    }
+    else
     {
         range_data_.origin = sensor_to_base_link_transform_.translation().head<2>().cast<float>();
         range_data_.returns.clear();
         range_data_.misses.clear();
         max_time_pose = transform::Rigid2d();
-        for(auto &point : point_cloud)
+        for (auto &point : point_cloud)
         {
             range_data_.returns.push_back(point.head<2>());
         }
@@ -272,7 +273,7 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
     {
         return observation;
     }
-    
+
     std::vector<sensor::PointCloud> all_points_in_odom;
     for (auto &points : reflector_points)
     {
@@ -311,7 +312,6 @@ sensor::Observation LaserReflectorDetect::HandleLaserScan(const sensor_msgs::Las
     // std::cout << "\n detected " << observation.cloud_.size() << " reflectors" << std::endl;
     LOG(INFO) << "Detect " << observation.cloud_.size() << " reflectors";
 
-   
     return observation;
 }
 

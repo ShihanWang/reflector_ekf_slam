@@ -29,12 +29,14 @@ PointCloud AdaptivelyVoxelFiltered(
     const AdaptiveVoxelFilterOptions &options,
     const PointCloud &point_cloud)
 {
-  if (point_cloud.size() <= options.min_num_points) {
+  if (point_cloud.size() <= options.min_num_points)
+  {
     // 'point_cloud' is already sparse enough.
     return point_cloud;
   }
   PointCloud result = VoxelFilter(options.max_length).Filter(point_cloud);
-  if (result.size() >= options.min_num_points) {
+  if (result.size() >= options.min_num_points)
+  {
     // Filtering with 'max_length' resulted in a sufficiently dense point cloud.
     return result;
   }
@@ -42,7 +44,8 @@ PointCloud AdaptivelyVoxelFiltered(
   // dense point cloud. We give up and use the full 'point_cloud' if reducing
   // the edge length by a factor of 1e-2 is not enough.
   for (float high_length = options.max_length;
-       high_length > 1e-2f * options.max_length; high_length /= 2.f) {
+       high_length > 1e-2f * options.max_length; high_length /= 2.f)
+  {
     float low_length = high_length / 2.f;
     result = VoxelFilter(low_length).Filter(point_cloud);
     if (result.size() >= options.min_num_points)

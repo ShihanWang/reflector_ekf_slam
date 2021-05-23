@@ -12,13 +12,13 @@ namespace reflector_detect
 
 class PoseExtrapolatorInterface
 {
-  public:
-    PoseExtrapolatorInterface() {}
-    virtual ~PoseExtrapolatorInterface() {}
-    virtual void TrimDataByTime(const double &time) = 0;
-    virtual void HandleOdometryData(const sensor::OdometryData &msg) {}
-    virtual void HandleImuData(const sensor::ImuData &msg) {}
-    virtual transform::Rigid2d ExtrapolatorPose(const double &time) = 0;
+public:
+  PoseExtrapolatorInterface() {}
+  virtual ~PoseExtrapolatorInterface() {}
+  virtual void TrimDataByTime(const double &time) = 0;
+  virtual void HandleOdometryData(const sensor::OdometryData &msg) {}
+  virtual void HandleImuData(const sensor::ImuData &msg) {}
+  virtual transform::Rigid2d ExtrapolatorPose(const double &time) = 0;
 };
 
 } // namespace reflector_detect

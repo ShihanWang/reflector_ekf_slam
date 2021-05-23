@@ -72,7 +72,7 @@ public:
   virtual std::unique_ptr<Grid2D> ComputeCroppedGrid() const = 0;
 
   virtual bool DrawToSubmapTexture(
-      SubmapTexture* const texture,
+      SubmapTexture *const texture,
       transform::Rigid3d local_pose) const = 0;
 
 protected:

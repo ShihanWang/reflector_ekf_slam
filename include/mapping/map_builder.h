@@ -56,13 +56,13 @@ class MapBuilder
     std::unique_ptr<transform::Rigid2d> ScanMatch(
         common::Time time, const transform::Rigid2d &pose_prediction,
         const sensor::PointCloud &filtered_gravity_aligned_point_cloud);
-    void InsertIntoSubmap(const sensor::RangeData& range_data_in_local);
-    std::unique_ptr<Grid2D> CreateGrid(const Eigen::Vector2f& origin);
+    void InsertIntoSubmap(const sensor::RangeData &range_data_in_local);
+    std::unique_ptr<Grid2D> CreateGrid(const Eigen::Vector2f &origin);
 
     MapBuilderOptions options_;
     std::unique_ptr<Submap2D> submap_;
     std::unique_ptr<scan_matching::RealTimeCorrelativeScanMatcher2D>
-      real_time_correlative_scan_matcher_;
+        real_time_correlative_scan_matcher_;
     std::unique_ptr<scan_matching::CeresScanMatcher2D> ceres_scan_matcher_;
     ValueConversionTables conversion_tables_;
     std::unique_ptr<ProbabilityGridRangeDataInserter2D> range_data_inserter_;
