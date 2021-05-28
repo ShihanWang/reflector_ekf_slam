@@ -7,7 +7,7 @@ SET(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-option(GPS OFF)
+option(GPS ON)
 
 if(GPS)
   message("You are using an unfinished EKF module !!!!!!!!!!!!")

@@ -302,10 +302,42 @@ void ReflectorEKFSLAMGPS::HandleObservationMessage(const sensor::Observation &ob
                 Q.block(2 * (M + i), 2 * (M + i), 2, 2) = Qt_;
             }
         }
-        const auto K_t = state_.sigma * H_t.transpose() * (H_t * state_.sigma * H_t.transpose() + Q).inverse();
-        state_.mu += K_t * (zt - zt_hat);
-        state_.mu(2) = std::atan2(std::sin(state_.mu(2)), std::cos(state_.mu(2)));
-        state_.sigma = state_.sigma - K_t * H_t * state_.sigma;
+        if (!observation.gps_pose_)
+        {
+            const auto K_t = state_.sigma * H_t.transpose() * (H_t * state_.sigma * H_t.transpose() + Q).inverse();
+            state_.mu += K_t * (zt - zt_hat);
+            state_.mu(2) = std::atan2(std::sin(state_.mu(2)), std::cos(state_.mu(2)));
+            state_.sigma = state_.sigma - K_t * H_t * state_.sigma;
+        }
+        else
+        {
+            Eigen::MatrixXd H_t_2 = Eigen::MatrixXd::Zero(2 * MM + 3, N);
+            H_t_2.topRows(2 * MM) = H_t;
+            H_t_2.block(2 * MM, 0, 3, 3) = Eigen::Matrix3d::Identity();
+            Eigen::VectorXd zt_2 = Eigen::VectorXd::Zero(2 * MM + 3);
+            zt_2.topRows(2 * MM) = zt;
+            zt_2.bottomRows(3) = Eigen::Vector3d(observation.gps_pose_->translation().x(),
+                                                 observation.gps_pose_->translation().y(),
+                                                 observation.gps_pose_->rotation().angle());
+            Eigen::VectorXd zt_hat_2 = Eigen::VectorXd::Zero(2 * MM + 3);
+            zt_hat_2.topRows(2 * MM) = zt_hat;
+            zt_hat_2.bottomRows(3) = state_.mu.topRows(3);
+            Eigen::VectorXd delta_zt = zt_2 - zt_hat_2;
+            const double delta_theta = delta_zt(2 * MM + 2);
+            Eigen::Quaterniond dq(std::cos(delta_theta / 2), 0., 0., std::sin(delta_theta / 2));
+            delta_zt(2 * MM + 2) = transform::RotationQuaternionToAngleAxisVector(dq)(2);
+            Eigen::MatrixXd Q_2 = Eigen::MatrixXd::Zero(2 * MM + 3, 2 * MM + 3);
+            Q_2.block(0, 0, 2 * MM, 2 * MM) = Q;
+            Eigen::Matrix3d pose_coviarance;
+            pose_coviarance << 0.05 * 0.05, 0., 0.,
+                0., 0.05 * 0.05, 0.,
+                0., 0., 0.017 * 0.017;
+            Q_2.block(2 * MM, 2 * MM, 3, 3) = pose_coviarance;
+            const auto K_t = state_.sigma * H_t_2.transpose() * (H_t_2 * state_.sigma * H_t_2.transpose() + Q_2).inverse();
+            state_.mu += K_t * delta_zt;
+            state_.mu(2) = std::atan2(std::sin(state_.mu(2)), std::cos(state_.mu(2)));
+            state_.sigma = state_.sigma - K_t * H_t_2 * state_.sigma;
+        }
     }
 
     const int N2 = result.new_ids.size();
