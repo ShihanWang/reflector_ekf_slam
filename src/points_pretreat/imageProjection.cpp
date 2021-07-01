@@ -138,6 +138,7 @@ public:
         laserCloudIn->clear();
         extractedCloud->clear();
         // reset range matrix for range image projection
+        // 将深度矩阵的所有默认初始值设置为 最大浮点数FLT_MAX
         rangeMat = cv::Mat(N_SCAN, Horizon_SCAN, CV_32F, cv::Scalar::all(FLT_MAX));
 
         imuPointerCur = 0;
@@ -159,8 +160,8 @@ public:
         // 将imu数据转到lidar坐标系下, 这里在params中配置过imu in lidar的外参
         sensor_msgs::Imu thisImu = imuConverter(*imuMsg);
 
-        // 这里用双端队列来装数据，pop_front()方便做滑窗
         std::lock_guard<std::mutex> lock1(imuLock);
+        // 这里用双端队列来装数据，pop_front()方便做滑窗
         imuQueue.push_back(thisImu);
 
         // debug IMU data
@@ -200,7 +201,7 @@ public:
 
     // 每一帧点云进来都这么处理
 
-    // 点云投影成深度图->去畸变
+    // 点云去畸变后 投影成深度图
         projectPointCloud();
 
     // 从深度图中提取点云, 给lidar odometry用
@@ -215,14 +216,14 @@ public:
 
   bool cachePointCloud(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg) {
     // 清除内存中的临时点云
-        cloudQueue.push_back(*laserCloudMsg);
-        if (cloudQueue.size() <= 2)
+        cloudQueue.push_back(*laserCloudMsg);// 当前帧点云压入
+        if (cloudQueue.size() <= 2)// 同一时刻会有2帧点云，用于取得 当前帧点云的帧头和帧尾时间戳
             return false;
 
         // convert cloud
         // 点云队列先进先出,将最新的点云 转存到currentCloudMsg
         currentCloudMsg = std::move(cloudQueue.front());
-        cloudQueue.pop_front();// 转存完成后，弹出以节约内存
+        cloudQueue.pop_front();// 转存完成后，弹出，可继续缓存下一帧点云
         // 激光雷达类型检测
         if (sensor == SensorType::VELODYNE)
         {
@@ -267,10 +268,11 @@ public:
         }
 
         // get timestamp
-        // 这里得到的是当前最新 点云数据
-        cloudHeader = currentCloudMsg.header;
-        timeScanCur = cloudHeader.stamp.toSec();
-        timeScanEnd = timeScanCur + laserCloudIn->points.back().time;
+        // velodyne驱动的默认配置是 timestamp_first_packet = false,取的组成当前帧的最后一个packet包来做时间戳
+        // 按照lio_sam的去畸变逻辑，应该是把这个参数该成了 true，取的组成当前帧的第一个packet包来做时间戳
+        cloudHeader = currentCloudMsg.header;// 当前帧点云
+        timeScanCur = cloudHeader.stamp.toSec();// 代表当前帧点云帧头时间戳
+        timeScanEnd = timeScanCur + laserCloudIn->points.back().time;// 下一帧点云帧头时间戳=当前帧点云帧尾时间戳
 
         // check dense flag
         // 像velodyne激光，它会在驱动层把无效的NaN值去除，然后再发出来；但不是所有激光都支持，已知速腾激光不行
@@ -281,12 +283,13 @@ public:
             ros::shutdown();
         }
 
-    // veloodyne和ouster都自带ring通道数据
-    // 其他雷达需要注释掉这一部分,自行计算
-    // 最好是选择雷达驱动自带ring通道的激光雷达；
-    // 如果是自己通过点云x，y，z来计算垂直角度，进而确定ring编号，在激光线束多，比如64线时
-    // 此时由于垂直角度分辨率很小了，加上激光本身的距离波动，此时很容易算错角度，分错ring号
-    // check ring channel
+        // check ring channel
+        // 检查激光点云数据中是否包含 点云线束编号 信息
+          // veloodyne和ouster都自带ring通道数据
+          // 其他雷达需要注释掉这一部分,自行计算
+          // 最好是选择雷达驱动自带ring通道的激光雷达；
+          // 如果是自己通过点云x，y，z来计算垂直角度，再根据激光的处置角度分辨率来确定ring编号的话，在激光线束多，比如64线时
+          // 此时由于垂直角度分辨率很小了，加上激光本身的测距波动，此时很容易算错角度而分错ring号
         static int ringFlag = 0;
         if (ringFlag == 0)
         {
@@ -307,6 +310,7 @@ public:
         }
 
         // check point time
+        // 检查激光点云数据中是否包含 时间戳 信息
         if (deskewFlag == 0)
         {
             deskewFlag = -1;
@@ -340,11 +344,11 @@ public:
             return false;
         }
 
-    // 遍历imu队列, 计算点云帧对应的imu数据, 包括积分计算其转过的角度
-    // 用于后续点云去畸变
+        // 遍历imu队列, 计算点云帧对应的imu数据, 包括积分计算其转过的角度
+        // 用于后续点云去畸变
         imuDeskewInfo();
 
-    // odom去畸变参数配置
+        // odom去畸变参数配置
         odomDeskewInfo();
 
         return true;
@@ -352,7 +356,7 @@ public:
 
   void imuDeskewInfo() {
     //这个参数在地图优化程序中用到  首先为false 完成相关操作后置true
-        cloudInfo.imuAvailable = false;
+    cloudInfo.imuAvailable = false;
 
     // imu去畸变参数
     // timeScanCur指当前点云帧的时间戳
@@ -376,10 +380,11 @@ public:
             double currentImuTime = thisImuMsg.header.stamp.toSec();
 
             // get roll, pitch, and yaw estimation for this scan
-            if (currentImuTime <= timeScanCur) // 点云时间戳在前
-                // 用imu的欧拉角做扫描的位姿估计,直接把值给了cloudInfo在地图优化程序中使用
+            if (currentImuTime <= timeScanCur)// 取到imu队列中时间戳最 左趋近timeScanCur 的那帧imu姿态作为当前帧点云的初始姿态
+                // 用imu的欧拉角做scan的位姿估计,直接把值给了cloudInfo在地图优化程序中使用
                 imuRPY2rosRPY(&thisImuMsg, &cloudInfo.imuRollInit, &cloudInfo.imuPitchInit, &cloudInfo.imuYawInit);
-            //  如果当前Imu时间比下一帧时间大于0.01退出, imu频率大于100hz才比较有用
+            //  如果当前Imu时间比 当前帧点云时间戳尾还大0.01
+            //  则表示已经完成针对 当前帧点云头尾时间内覆盖的所有imu数据的 姿态积分,可退出
             if (currentImuTime > timeScanEnd + 0.01)
                 break;
 
@@ -398,8 +403,9 @@ public:
             imuAngular2rosAngular(&thisImuMsg, &angular_x, &angular_y, &angular_z);
 
             // integrate rotation
-            // 把角速度和时间间隔积分出转角,用于后续的去畸变
+            // 计算出相邻imu帧之间的时间差
             double timeDiff = currentImuTime - imuTime[imuPointerCur-1];
+            // 当前imu帧对应转角 = 上一次帧imu转角 + 角速度*时间差
             imuRotX[imuPointerCur] = imuRotX[imuPointerCur-1] + angular_x * timeDiff;
             imuRotY[imuPointerCur] = imuRotY[imuPointerCur-1] + angular_y * timeDiff;
             imuRotZ[imuPointerCur] = imuRotZ[imuPointerCur-1] + angular_z * timeDiff;
@@ -407,12 +413,13 @@ public:
             ++imuPointerCur;
         }
 
+        // 完成去畸变时imu的准备工作后, imuPointerCur 代表的是最后的那一帧imu数据的序号
         --imuPointerCur;
 
         if (imuPointerCur <= 0)
             return;
 
-        // 这一帧点云的imu数据可用
+        // 得到 当前帧点云覆盖的时间戳范围内 对应的所有imu数据
         cloudInfo.imuAvailable = true;
     }
 
@@ -422,19 +429,19 @@ public:
 
         while (!odomQueue.empty())
         {
-        // 以0.01为阈值 舍弃在激光帧采集时间timeScanCur之前的odom数据(所以你的 imu频率至少要大于100hz)
+          /**********************************************************************/
+            // 以0.01为阈值 舍弃在激光帧采集时间timeScanCur之前的odom数据
             if (odomQueue.front().header.stamp.toSec() < timeScanCur - 0.01)
                 odomQueue.pop_front();
             else
                 break;
         }
-
         if (odomQueue.empty())
             return;
-
-        // 点云数据在前
+        // 第一个odom数据要出现在 当前帧点云之前
         if (odomQueue.front().header.stamp.toSec() > timeScanCur)
             return;
+        /**让通常低频,不足100hz的odom数据也要 与当前帧点云的时间戳 左相差 不到1ms,是否合理?**/
 
         // get start odometry at the beinning of the scan
         // 遍历odom队列,将odom的位姿作为点云信息中预测位姿
@@ -459,7 +466,7 @@ public:
         tf::Matrix3x3(orientation).getRPY(roll, pitch, yaw);
 
         // Initial guess used in mapOptimization
-        // 用当前odom队列的起始位姿作为当前点云的初始位姿
+        // 用当前odom队列的起始位姿作为当前帧点云的初始位姿
         cloudInfo.initialGuessX = startOdomMsg.pose.pose.position.x;
         cloudInfo.initialGuessY = startOdomMsg.pose.pose.position.y;
         cloudInfo.initialGuessZ = startOdomMsg.pose.pose.position.z;
@@ -473,33 +480,36 @@ public:
         // 获得一帧扫描末尾的里程计消息,和初始位姿无关, 主要用于去畸变、运动补偿
         odomDeskewFlag = false;
 
-        // 计算激光扫描帧结尾时刻的里程计消息
+        // 计算当前帧点云时间戳尾时刻的里程计消息
+          // 如果最后一帧odom数据时间戳都在 timeScanEnd 之前,
+          // 那很有可能取不到最接近timeScanEnd的odom数据,放弃寻找,提前退出
         if (odomQueue.back().header.stamp.toSec() < timeScanEnd)
             return;
 
         // 扫描结束时的odom
         nav_msgs::Odometry endOdomMsg;
-
         for (int i = 0; i < (int)odomQueue.size(); ++i)
         {
             endOdomMsg = odomQueue[i];
 
+            // 取时间戳上 最右贴近的odom数据作为 帧尾时刻对应的odom
             if (ROS_TIME(&endOdomMsg) < timeScanEnd)
                 continue;
             else
                 break;
         }
 
-        // 位姿协方差矩阵判断,位姿协方差不一致的话退出
+        // 对帧头和帧尾odom的位姿协方差矩阵 进行一致性判断 否，则退出
+        // 不要求绝对一致 所以用round()函数保证 四舍五入到整数时能一致即可
         if (int(round(startOdomMsg.pose.covariance[0])) != int(round(endOdomMsg.pose.covariance[0])))
             return;
 
-        // 获得起始变换
+        // 获得帧头odom变换
         Eigen::Affine3f transBegin = pcl::getTransformation(startOdomMsg.pose.pose.position.x,
                                                             startOdomMsg.pose.pose.position.y,
                                                             startOdomMsg.pose.pose.position.z, roll, pitch, yaw);
 
-        // 获得结尾变换
+        // 获得帧尾odom变换
         tf::quaternionMsgToTF(endOdomMsg.pose.pose.orientation, orientation);
         tf::Matrix3x3(orientation).getRPY(roll, pitch, yaw);
         Eigen::Affine3f transEnd = pcl::getTransformation(endOdomMsg.pose.pose.position.x,
@@ -509,7 +519,7 @@ public:
         // 获得一帧扫描起始与结束时刻间的变换, 参考loam
         Eigen::Affine3f transBt = transBegin.inverse() * transEnd;
 
-        // 计算这个首尾odom的增量, 用于后续去畸变
+        // 计算这个头、尾odom的增量, 用于后续去畸变
         float rollIncre, pitchIncre, yawIncre;
         pcl::getTranslationAndEulerAngles(transBt, odomIncreX, odomIncreY, odomIncreZ, rollIncre, pitchIncre, yawIncre);
 
@@ -521,27 +531,30 @@ public:
     {
         *rotXCur = 0; *rotYCur = 0; *rotZCur = 0;
 
-        // 当前point_time在imu_time前面，舍弃
         // 最终要保证点云时间在两帧imu数据中间。
         int imuPointerFront = 0;
         while (imuPointerFront < imuPointerCur)
         {
+            //找到第一个大于point_time的imu数据就退出,这样的话
+            //        back           point_time        front
+            //  imuPointerFront-1    point_time   imuPointerFront
             if (pointTime < imuTime[imuPointerFront])
                 break;
             ++imuPointerFront;
         }
 
-        // pointTime在imu队列的起点，直接获取其旋转增量(在imuDeskewInfo函数中已经计算了)
+        // pointTime对应imu队列的第一个或是最后一个，直接获得取其对应的旋转增量(在imuDeskewInfo函数中已经计算好了)
         // pointTime在imu队列中间的话，按比率获取
-        if (pointTime > imuTime[imuPointerFront] || imuPointerFront == 0) {
+        if (imuPointerFront == 0 || pointTime > imuTime[imuPointerFront]) {
             *rotXCur = imuRotX[imuPointerFront];
             *rotYCur = imuRotY[imuPointerFront];
             *rotZCur = imuRotZ[imuPointerFront];
         } else {
-            // 根据点的时间信息,获得每个点的时刻的旋转变化量
+            // 到这里说明，该点的时间戳位于两个imu数据对应时间戳的中部位置
             int imuPointerBack = imuPointerFront - 1;
-            //  back  point_time  front
-            //  计算point_time在imu队列的前后占比
+            // 计算point_time在imu队列的前后占比
+            // 公式： x = a*[(b-x)/(b-a)] + b*[(x-a)/(b-a)]
+            // a为头，b为尾  注意这里的关系是反的，头点a要乘x到尾点的比率
             double ratioFront =
                   (pointTime - imuTime[imuPointerBack]) / (imuTime[imuPointerFront] - imuTime[imuPointerBack]);
             double ratioBack =
@@ -597,7 +610,7 @@ public:
         }
 
         // transform points to start
-        // 把点投影到每一帧扫描的起始时刻,参考Loam
+        // 计算每个点相对于当前帧起始点之间的 相对偏移量,参考Loam
         Eigen::Affine3f transFinal = pcl::getTransformation(posXCur, posYCur, posZCur, rotXCur, rotYCur, rotZCur);
         Eigen::Affine3f transBt = transStartInverse * transFinal;
 
@@ -612,7 +625,7 @@ public:
     }
 
       void projectPointCloud() {
-        // 将点云投影成深度图
+        // 将点云投影成深度图(对于vlp16来说就是把原始xyz点云变成 16个2d scan数据)
         int cloudSize = laserCloudIn->points.size();
         // range image projection
         for (int i = 0; i < cloudSize; ++i) {
@@ -627,16 +640,18 @@ public:
             float range = pointDistance(thisPoint);
             if (range < lidarMinRange || range > lidarMaxRange)
                 continue;
-            // 记录当前点云所属ring号。没有ring 的话需要依据垂直角度计算
+            // 记录当前点云所属ring号=深度图中的行号rowIdn。没有ring 的话需要依据垂直角度计算
             int rowIdn = laserCloudIn->points[i].ring;
             if (rowIdn < 0 || rowIdn >= N_SCAN)
                 continue;
 
+            // 以ring号对点云降采样
+            // 比如128线点云对你的CPU来说太多,你只要16线 16=128/8 downsampleRate此时设为8
             if (rowIdn % downsampleRate != 0)
                 continue;
-            // 激光点的水平角度, 计算一帧点云转过多少度，进而计算每个点投影到深度图中的列id和时间戳
+            // 激光点的水平角度, 计算当前点转过的角度，进而计算每个点投影到深度图中的列id和时间戳
             float horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
-            // 角分辨率 360/1800
+            // 角分辨率
             static float ang_res_x = 360.0/float(Horizon_SCAN);
 
             int columnIdn = -round((horizonAngle-90.0)/ang_res_x) + Horizon_SCAN/2;
@@ -646,12 +661,12 @@ public:
             if (columnIdn < 0 || columnIdn >= Horizon_SCAN)
                 continue;
 
+            // 若该编号下的值已经不是初始值，说明已经被赋值过了
             if (rangeMat.at<float>(rowIdn, columnIdn) != FLT_MAX)
                 continue;
 
             //  依据每个点field中的time时间戳，开始做点云去畸变--运动补偿方式
             thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time);
-
             // 把计算好的当前点的 深度、行号、列号 归类到深度矩阵中
             rangeMat.at<float>(rowIdn, columnIdn) = range;
             // 计算当前点在 无序排列中对应的下标索引值
@@ -666,13 +681,13 @@ public:
         int count = 0;
         // 提取点云给odometry
         // extract segmented cloud for lidar odometry
-        for (int i = 0; i < N_SCAN; ++i)
+        for (int i = 0; i < N_SCAN; ++i)// 先按行遍历行号(对应着ring)，这里是16线所以是16行
         {
             cloudInfo.startRingIndex[i] = count - 1 + 5;
 
             for (int j = 0; j < Horizon_SCAN; ++j)
             {
-                // 深度图中不一定每个位置都有点，只取有深度的点
+                // 深度图矩阵中不一定每个位置都有点，只取有深度的点
                 if (rangeMat.at<float>(i,j) != FLT_MAX)
                 {
                     // mark the points' column index for marking occlusion later
